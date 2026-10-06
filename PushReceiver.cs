@@ -43,6 +43,7 @@ internal static class Program
     private const string LogFile = "PushReceiver.log";
     private const int PollMinSeconds = 5;
     private const int PollMaxSeconds = 3600;
+    private const int BadgeHeight = 19;          // 详情行徽标高度（时间与徽标共用，保证同一竖直基准）
 
     private static string _sendKey = "";
 
@@ -81,6 +82,13 @@ internal static class Program
         return ink.Width;
     }
 
+    // 排版推进量：GDI 的推进宽（相邻元素排布用它，不能用墨迹宽 —— 墨迹不含左右边距）
+    private static int TextAdvance(string text, Font f)
+    {
+        return TextRenderer.MeasureText(text, f, new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Width;
+    }
+
     private static Rectangle IconInk(string glyph, Font f)
     {
         string key = glyph + "|" + f.SizeInPoints.ToString("0.0", CultureInfo.InvariantCulture);
@@ -89,7 +97,12 @@ internal static class Program
         Rectangle box = new Rectangle(0, 0, 1, 1);
         try
         {
-            using (Bitmap bm = new Bitmap(96, 96))
+            // 位图必须按文字实际尺寸分配：写死尺寸会把长字符串裁掉，量出的墨迹宽会偏小
+            Size need = TextRenderer.MeasureText(glyph, f, new Size(int.MaxValue, int.MaxValue),
+                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            int bw = Math.Min(4096, Math.Max(32, need.Width + 32));
+            int bh = Math.Min(512, Math.Max(32, need.Height + 32));
+            using (Bitmap bm = new Bitmap(bw, bh))
             {
                 using (Graphics g2 = Graphics.FromImage(bm))
                 {
@@ -98,9 +111,9 @@ internal static class Program
                         TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
                 }
                 int minx = 9999, miny = 9999, maxx = -1, maxy = -1;
-                for (int y = 0; y < 96; y++)
+                for (int y = 0; y < bh; y++)
                 {
-                    for (int x = 0; x < 96; x++)
+                    for (int x = 0; x < bw; x++)
                     {
                         if (bm.GetPixel(x, y).R > 40)
                         {
@@ -1668,6 +1681,10 @@ internal static class Program
     private static readonly Color CWarn = Color.FromArgb(0xe2, 0xb0, 0x4a);
     private static readonly Color CErr = Color.FromArgb(0xff, 0x8a, 0x8a);
     private static readonly Color CBorderStrong = Color.FromArgb(0x3a, 0x3e, 0x45);
+    private static readonly Color CBadgeBg = Color.FromArgb(0x2a, 0x2d, 0x33);
+    private static readonly Color CBadgeReadBg = Color.FromArgb(0x25, 0x28, 0x2d);
+    private static readonly Color CBadgeReadLine = Color.FromArgb(0x38, 0x3c, 0x43);
+    private static readonly Color CBadgeReadText = Color.FromArgb(0x8f, 0x96, 0x9f);
     private static readonly Color CAccentLine = Color.FromArgb(0x55, 0x68, 0xb8);
     private static readonly Color CChipSelBg = Color.FromArgb(0x2b, 0x33, 0x50);
     private static readonly Color CChipSelLine = Color.FromArgb(0x4a, 0x5a, 0x94);
@@ -2382,11 +2399,10 @@ internal static class Program
 
     private static int DrawBadge(Graphics g, string text, int x, int y, Font font, Color bg, Color line, Color fgColor)
     {
-        SizeF sz = g.MeasureString(text, font);
-        int w = (int)Math.Ceiling(sz.Width) + 16;
-        int h = 19;
+        int w = TextAdvance(text, font) + 16;      // GDI 推进宽（与绘制同族），不用 GDI+ MeasureString
+        int h = BadgeHeight;                        // 徽标高度唯一来源：时间行也用它
         Rectangle r = new Rectangle(x, y, w, h);
-        using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(r, 9))
+        using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(r, (int)Math.Round(h / 2.0)))
         {
             using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, path);
             using (Pen pen = new Pen(line)) g.DrawPath(pen, path);
@@ -2702,8 +2718,8 @@ internal static class Program
                     chipRects.Clear();
                     for (int i = 0; i < chipLabels.Count; i++)
                     {
-                        SizeF sz = g.MeasureString(chipLabels[i], fontChip);
-                        int w = (int)Math.Ceiling(sz.Width) + 18;
+                        int chipW = TextAdvance(chipLabels[i], fontChip);
+                        int w = chipW + 18;
                         int h = 21;
                         if (x + w > tagPanel.Width - padX && x > padX)
                         {
@@ -2834,17 +2850,17 @@ internal static class Program
                 int x = 20;
                 int y = 4;
                 string time = n != null ? n.Time : "";
-                int timeW = DrawInk(e.Graphics, time, fontSmall, new Rectangle(x, y, 200, metaPanel.Height), CMuted, 0);
-                x += timeW + 10;
+                DrawInk(e.Graphics, time, fontSmall, new Rectangle(x, y, TextAdvance(time, fontSmall) + 6, BadgeHeight), CMuted, 0);
+                x += TextAdvance(time, fontSmall) + 10;
                 if (n != null)
                 {
                     bool unreadMeta = !readIds.Contains(n.Id);
                     x += DrawBadge(e.Graphics, unreadMeta ? "未读" : "已读", x, y, fontSmall,
-                        unreadMeta ? CChipBg : Color.FromArgb(0x25, 0x28, 0x2d),
-                        unreadMeta ? CChipLine : Color.FromArgb(0x38, 0x3c, 0x43),
-                        unreadMeta ? CChipText : Color.FromArgb(0x8f, 0x96, 0x9f)) + 6;
-                    if (n.Src.StartsWith("sc3")) x += DrawBadge(e.Graphics, "Server酱³", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), CBorderStrong, CChipUnselText) + 6;
-                    else if (n.Src.Length > 0) x += DrawBadge(e.Graphics, "本地投递", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), CBorderStrong, CChipUnselText) + 6;
+                        unreadMeta ? CChipBg : CBadgeReadBg,
+                        unreadMeta ? CChipLine : CBadgeReadLine,
+                        unreadMeta ? CChipText : CBadgeReadText) + 6;
+                    if (n.Src.StartsWith("sc3")) x += DrawBadge(e.Graphics, "Server酱³", x, y, fontSmall, CBadgeBg, CBorderStrong, CChipUnselText) + 6;
+                    else if (n.Src.Length > 0) x += DrawBadge(e.Graphics, "本地投递", x, y, fontSmall, CBadgeBg, CBorderStrong, CChipUnselText) + 6;
                     foreach (string t in n.Tags)
                     {
                         x += DrawBadge(e.Graphics, "#" + t, x, y, fontSmall, CChipBg, CChipLine, CChipText) + 6;
