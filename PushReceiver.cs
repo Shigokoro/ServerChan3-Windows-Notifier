@@ -309,6 +309,8 @@ internal static class Program
                 tray.Visible = true;
                 _keepAlive.Add(tray);
                 _keepAlive.Add(menu);
+                _tray = tray;
+                RefreshTrayIcon();
                 Log("tray icon created");
                 Application.Run(new ApplicationContext());
             }
@@ -317,6 +319,76 @@ internal static class Program
                 Log("FATAL: " + ex.ToString());
             }
         }
+    }
+
+    // ── 托盘图标：有未读时在右上角画红点；红点几何与配色只在这里定义 ──
+    private static NotifyIcon _tray = null;
+    private static IntPtr _trayHicon = IntPtr.Zero;
+
+    [DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr handle);
+
+    private static Icon BuildTrayIcon(bool unread)
+    {
+        Bitmap bmp = new Bitmap(32, 32);
+        try
+        {
+            using (Icon src = Icon.ExtractAssociatedIcon(Application.ExecutablePath))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                if (src != null) g.DrawIcon(src, new Rectangle(0, 0, 32, 32));
+                if (unread)
+                {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    float d = 11f;                                // 红点直径（32px 图标的 ~34%，不再压住铃铛）
+                    float ring = 2f;                              // 与图标同色的隔断环
+                    float cx = 32f - 2f - d / 2f;                 // 圆心贴右上角，距边 2px
+                    float cy = 2f + d / 2f;
+                    using (SolidBrush rb = new SolidBrush(Color.FromArgb(0x4a, 0x5a, 0xc8)))
+                        g.FillEllipse(rb, cx - d / 2f - ring, cy - d / 2f - ring, d + ring * 2f, d + ring * 2f);
+                    using (SolidBrush db = new SolidBrush(Color.FromArgb(0xe5, 0x48, 0x4d)))
+                        g.FillEllipse(db, cx - d / 2f, cy - d / 2f, d, d);
+                }
+            }
+        }
+        catch { }
+        IntPtr h = bmp.GetHicon();
+        Icon made = (Icon)Icon.FromHandle(h).Clone();
+        if (_trayHicon != IntPtr.Zero) { try { DestroyIcon(_trayHicon); } catch { } }
+        _trayHicon = h;
+        bmp.Dispose();
+        return made;
+    }
+
+    private static int UnreadCount()
+    {
+        HashSet<string> read = new HashSet<string>();
+        try
+        {
+            string rf = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ReadFile);
+            if (File.Exists(rf)) foreach (string l in File.ReadAllLines(rf)) { string t = l.Trim(); if (t.Length > 0) read.Add(t); }
+        }
+        catch { }
+        int n = 0;
+        foreach (Notice x in LoadStore(500)) if (!read.Contains(x.Id)) n++;
+        return n;
+    }
+
+    private static void RefreshTrayIcon()
+    {
+        if (_tray == null) return;
+        try
+        {
+            int unread = UnreadCount();
+            Icon old = _tray.Icon;
+            _tray.Icon = BuildTrayIcon(unread > 0);
+            if (old != null) old.Dispose();
+            string tip = unread > 0 ? (AppTitle + " · " + unread + " 条未读") : AppTitle;
+            if (tip.Length > 60) tip = tip.Substring(0, 60);
+            if (_tray.Text != tip) { _tray.Text = tip; Log("tray icon updated (unread=" + unread + ")"); }
+        }
+        catch { }
     }
 
     private static void LoadConfig(string path)
@@ -460,6 +532,7 @@ internal static class Program
             {
                 if (!_pollEnabled || _sendKey.Length == 0)
                 {
+                    RefreshTrayIcon();      // 轮询关闭时也定期同步红点（被读/清理仍要反映）
                     _syncNow.Wait(30000);
                     _syncNow.Reset();
                     continue;
@@ -501,6 +574,7 @@ internal static class Program
                 firstRun = false;
                 _sc3LastSync = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 _sc3LastError = "";
+                RefreshTrayIcon();          // 新消息入库后同步托盘红点
             }
             catch (Exception ex)
             {
@@ -831,6 +905,7 @@ internal static class Program
                 {
                     LoadConfig(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, IniFile));
                     _sc3Token = "";
+                    RefreshTrayIcon();
                     _syncNow.Set();
                     Respond(stream, 200, "{\"ok\":true,\"reloaded\":true,\"sendkeyConfigured\":" + (_sendKey.Length > 0 ? "true" : "false") + "}");
                     return;
@@ -839,6 +914,7 @@ internal static class Program
                 if (method == "GET" && pathOnly == "/show")
                 {
                     OpenViewer(QueryValue(query, "id"));
+                    RefreshTrayIcon();
                     Respond(stream, 200, "{\"ok\":true}");
                     return;
                 }
