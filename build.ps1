@@ -32,5 +32,4 @@ Write-Host "facade: $fac"
 if ($LASTEXITCODE -ne 0) { throw "编译失败: $LASTEXITCODE" }
 
 Get-Item "$root\WinPushReceiver.exe" | ForEach-Object { 'OK: ' + $_.FullName + '  ' + $_.Length + ' bytes  ' + $_.LastWriteTime }
-if (-not (Test-Path "$root\WinPushReceiver.exe.config")) { throw '缺少 WinPushReceiver.exe.config（发布时需与 exe 一并分发）' }
-'提示: 发布 Release 时请同时附上 WinPushReceiver.exe 与 WinPushReceiver.exe.config'
+'提示: 产物是单个 exe，直接分发即可（DPI 感知由内嵌的 app.manifest 提供，无需 .exe.config）'
