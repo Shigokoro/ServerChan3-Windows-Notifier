@@ -380,10 +380,13 @@ internal static class Program
     // 清空 Windows 侧（操作中心）本应用的通知：清掉后任务栏图标上的未读红点随之消失
     private static void ClearWindowsToasts()
     {
+        // 只清「本应用」的通知：必须用带 AUMID 的重载，且 AUMID 非空。
+        // 严禁退化成无参 Clear()（那会以调用进程身份清理，语义不可控）；也绝不影响其它应用的通知。
+        if (_appId == null || _appId.Length == 0) { Log("clear windows toasts skipped: empty appid"); return; }
         try
         {
             ToastNotificationManager.History.Clear(_appId);
-            Log("cleared windows toasts (action center)");
+            Log("cleared windows toasts (own appid only: " + _appId + ")");
         }
         catch (Exception ex) { Log("clear windows toasts failed: " + ex.Message); }
     }
