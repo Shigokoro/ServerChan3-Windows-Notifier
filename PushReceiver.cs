@@ -1709,9 +1709,9 @@ internal static class Program
 
     private static void DrawChip(Graphics g, string text, int x, int y, Font font, out int usedWidth)
     {
-        Size sz = TextRenderer.MeasureText(text, font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding);
-        int w = sz.Width + 14;
-        int h = sz.Height + 4;
+        // 与筛选 chip 同一规则：宽度由墨迹派生（文字居中时左右内边距才对称）；高度保持原样
+        int w = IconInk(text, font).Width + 18;
+        int h = TextRenderer.MeasureText(text, font).Height + 4;
         Rectangle r = new Rectangle(x, y, w, h);
         using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(r, h / 2))
         {
@@ -2604,7 +2604,8 @@ internal static class Program
             markAllBtn.Height = 26;
             Button cleanBtn = FlatButton("", "\uE74D", 252, 5, 28, false);
             cleanBtn.Height = 26;
-            Button settingsBtn = FlatButton("", "\uE713", 282, 5, 28, true);
+            // E115 Settings：与 E713 同尺寸(14x14)，但齿形抗锯齿落点更对称
+            Button settingsBtn = FlatButton("", "\uE115", 282, 5, 28, true);
             settingsBtn.Height = 26;
 
             ToolTip tips = new ToolTip();
@@ -2769,8 +2770,9 @@ internal static class Program
                     chipRects.Clear();
                     for (int i = 0; i < chipLabels.Count; i++)
                     {
-                        int chipW = TextAdvance(chipLabels[i], fontChip);
-                        int w = chipW + 18;
+                        // 宽度用「墨迹宽 + 对称内边距」——与文字的居中落位同一度量族
+                        int chipW = IconInk(chipLabels[i], fontChip).Width;
+                        int w = chipW + 22;
                         int h = 21;
                         if (x + w > tagPanel.Width - padX && x > padX)
                         {
@@ -2940,8 +2942,8 @@ internal static class Program
                         using (SolidBrush b = new SolidBrush(sel ? CChipSelBg : CChipUnselBg)) e.Graphics.FillPath(b, path);
                         using (Pen pen = new Pen(sel ? CChipSelLine : CBorderStrong)) e.Graphics.DrawPath(pen, path);
                     }
-                    DrawInk(e.Graphics, chipLabels[i], fontChip, new Rectangle(r.X + 9, r.Y, r.Width - 12, r.Height),
-                        sel ? CChipSelText : CChipUnselText, 0);
+                    DrawInk(e.Graphics, chipLabels[i], fontChip, r,
+                        sel ? CChipSelText : CChipUnselText, 1);   // 水平居中（原来左对齐 + 手写 9/-12 内缩）
                 }
                 using (Pen sep = new Pen(Color.FromArgb(0x3a, 0x3f, 0x47))) e.Graphics.DrawLine(sep, 0, tagPanel.Height - 1, tagPanel.Width, tagPanel.Height - 1);
             };
