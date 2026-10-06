@@ -17,7 +17,7 @@ using Windows.UI.Notifications;
 
 internal static class Program
 {
-    private const string Version = "0.1.5";
+    private const string Version = "0.1.6";
     private const string Sc3LoginUrl = "https://bot.ftqq.com/login/by/sendkey";
     private const string Sc3InboxUrl = "https://bot.ftqq.com/sc3/push/index";
 
@@ -1486,6 +1486,11 @@ internal static class Program
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_FRAMECHANGED = 0x0020;
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int HTCAPTION = 2;
     private const int GWL_STYLE = -16;
     private const int WS_VSCROLL = 0x00200000;
     private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
@@ -1596,6 +1601,70 @@ internal static class Program
     }
 
     // 密码框的“显示/隐藏”眼睛：只画字形，不画任何底框（灰度抗锯齿，避免 ClearType 彩边）
+    // 无系统标题栏但仍可缩放/贴边（靠 WS_THICKFRAME），最大化时避开任务栏
+    private sealed class SkinForm : Form
+    {
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.Style |= 0x00010000;   // WS_MAXIMIZEBOX
+                cp.Style |= 0x00020000;   // WS_MINIMIZEBOX
+                cp.Style |= 0x00040000;   // WS_THICKFRAME
+                return cp;
+            }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try { MaximizedBounds = Screen.FromHandle(Handle).WorkingArea; } catch { }
+        }
+    }
+
+    // 标题栏按钮：最小化 / 最大化-还原 / 关闭（自绘，悬停高亮，关闭为红）
+    private sealed class CaptionButton : Control
+    {
+        public int Kind = 0;            // 0=最小化 1=最大化/还原 2=关闭
+        public bool Maximized = false;
+        private bool _hover = false;
+        private bool _down = false;
+        private static Font _f = null;
+
+        public CaptionButton()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Cursor = Cursors.Default;
+        }
+
+        private static Font Glyph()
+        {
+            if (_f == null) { try { _f = new Font("Segoe MDL2 Assets", 10F); } catch { _f = SystemFonts.DefaultFont; } }
+            return _f;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; _down = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            using (SolidBrush pb = new SolidBrush(Parent != null ? Parent.BackColor : CPanel2)) e.Graphics.FillRectangle(pb, ClientRectangle);
+            Color back = Color.Empty;
+            if (Kind == 2 && (_hover || _down)) back = _down ? Color.FromArgb(0xa8, 0x24, 0x18) : Color.FromArgb(0xc4, 0x2b, 0x1c);
+            else if (_down) back = Color.FromArgb(0x2a, 0x2e, 0x35);
+            else if (_hover) back = Color.FromArgb(0x33, 0x37, 0x3e);
+            if (back != Color.Empty) using (SolidBrush b = new SolidBrush(back)) e.Graphics.FillRectangle(b, ClientRectangle);
+            string g = Kind == 0 ? "\uE921" : (Kind == 1 ? (Maximized ? "\uE923" : "\uE922") : "\uE8BB");
+            Font f = Glyph();
+            TextRenderer.DrawText(e.Graphics, g, f, ClientRectangle,
+                Color.FromArgb(0xdf, 0xe2, 0xe7),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+        }
+    }
+
     private sealed class EyeToggle : Control
     {
         public bool Revealed = false;
@@ -2255,7 +2324,8 @@ internal static class Program
             try { fontTitle = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold); } catch { fontTitle = fontBase; }
             try { fontHead = new Font("Microsoft YaHei UI", 8.5F); } catch { fontHead = fontBase; }
 
-            Form form = new Form();
+            SkinForm form = new SkinForm();
+            form.FormBorderStyle = FormBorderStyle.None;
             try { form.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             form.Text = "Server酱3 推送通知";
             form.ClientSize = new Size(1000, 600);
@@ -2276,6 +2346,76 @@ internal static class Program
 
             form.Controls.Add(main);
             form.Controls.Add(sidebar);
+
+            // ── 自绘标题栏（无边框窗口）──
+            Panel titleBar = new Panel();
+            titleBar.Dock = DockStyle.Top;
+            titleBar.Height = 38;
+            titleBar.BackColor = CPanel2;
+
+            Label titleLbl = new Label();
+            titleLbl.Text = "Server酱3 推送通知";
+            titleLbl.SetBounds(14, 10, 420, 20);
+            titleLbl.ForeColor = CText;
+            titleLbl.Font = fontBase;
+            titleLbl.BackColor = CPanel2;
+
+            CaptionButton btnMin = new CaptionButton();
+            btnMin.Kind = 0;
+            btnMin.SetBounds(1000 - 138, 0, 46, 38);
+            CaptionButton btnMax = new CaptionButton();
+            btnMax.Kind = 1;
+            btnMax.SetBounds(1000 - 92, 0, 46, 38);
+            CaptionButton btnClose = new CaptionButton();
+            btnClose.Kind = 2;
+            btnClose.SetBounds(1000 - 46, 0, 46, 38);
+
+            EventHandler placeCaption = delegate
+            {
+                int right = titleBar.ClientSize.Width;
+                btnClose.Left = right - 46;
+                btnMax.Left = right - 92;
+                btnMin.Left = right - 138;
+            };
+            titleBar.Resize += delegate { placeCaption(null, EventArgs.Empty); };
+            titleBar.Controls.Add(titleLbl);
+            titleBar.Controls.Add(btnMin);
+            titleBar.Controls.Add(btnMax);
+            titleBar.Controls.Add(btnClose);
+            placeCaption(null, EventArgs.Empty);
+
+            btnMin.Click += delegate(object s2, EventArgs e2) { form.WindowState = FormWindowState.Minimized; };
+            btnMax.Click += delegate(object s2, EventArgs e2)
+            {
+                form.WindowState = (form.WindowState == FormWindowState.Maximized) ? FormWindowState.Normal : FormWindowState.Maximized;
+                btnMax.Maximized = (form.WindowState == FormWindowState.Maximized);
+                btnMax.Invalidate();
+            };
+            btnClose.Click += delegate(object s2, EventArgs e2) { form.Close(); };
+
+            MouseEventHandler dragMove = delegate(object s2, MouseEventArgs e2)
+            {
+                if (e2.Button != MouseButtons.Left) return;
+                try
+                {
+                    ReleaseCapture();
+                    SendMessage(form.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                }
+                catch { }
+            };
+            EventHandler toggleMax = delegate(object s2, EventArgs e2)
+            {
+                form.WindowState = (form.WindowState == FormWindowState.Maximized) ? FormWindowState.Normal : FormWindowState.Maximized;
+                btnMax.Maximized = (form.WindowState == FormWindowState.Maximized);
+                btnMax.Invalidate();
+            };
+            titleBar.MouseDown += dragMove;
+            titleBar.DoubleClick += toggleMax;
+            titleLbl.MouseDown += dragMove;
+            titleLbl.DoubleClick += toggleMax;
+
+            form.Controls.Add(titleBar);
+            _keepAlive.Add(titleBar);
 
             Panel catHead = new Panel();
             catHead.Dock = DockStyle.Top;
