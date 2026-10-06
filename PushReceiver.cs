@@ -68,12 +68,17 @@ internal static class Program
 
     // 唯一一份「把文字/字形放进盒子」的实现：先量墨迹框，再按墨迹居中。
     // 任何需要"居中/对齐到盒子里"的绘制都必须走这里，禁止各自用 VerticalCenter 估算。
-    private static void DrawInk(Graphics g, string text, Font f, Rectangle box, Color c, bool centerX)
+    // align: 0=左对齐 1=居中 2=右对齐（一律按墨迹框对齐，返回墨迹宽度供排版续接）
+    private static int DrawInk(Graphics g, string text, Font f, Rectangle box, Color c, int align)
     {
         Rectangle ink = IconInk(text, f);
-        int x = centerX ? box.X + (box.Width - ink.Width) / 2 - ink.X : box.X - ink.X;
+        int x;
+        if (align == 1) x = box.X + (box.Width - ink.Width) / 2 - ink.X;
+        else if (align == 2) x = box.Right - ink.Width - ink.X;
+        else x = box.X - ink.X;
         int y = box.Y + (box.Height - ink.Height) / 2 - ink.Y;
         TextRenderer.DrawText(g, text, f, new Point(x, y), c, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+        return ink.Width;
     }
 
     private static Rectangle IconInk(string glyph, Font f)
@@ -1695,7 +1700,7 @@ internal static class Program
             using (SolidBrush b = new SolidBrush(CChipBg)) g.FillPath(b, path);
             using (Pen pen = new Pen(CChipLine)) g.DrawPath(pen, path);
         }
-        DrawInk(g, text, font, r, CChipText, true);
+        DrawInk(g, text, font, r, CChipText, 1);
         usedWidth = w;
     }
 
@@ -1758,7 +1763,7 @@ internal static class Program
             if (back != Color.Empty) using (SolidBrush b = new SolidBrush(back)) e.Graphics.FillRectangle(b, ClientRectangle);
             string g = Kind == 0 ? "\uE921" : (Kind == 1 ? (Maximized ? "\uE923" : "\uE922") : "\uE8BB");
             Font f = Glyph();
-            DrawInk(e.Graphics, g, f, ClientRectangle, CTextStrong, true);
+            DrawInk(e.Graphics, g, f, ClientRectangle, CTextStrong, 1);
         }
     }
 
@@ -1849,12 +1854,12 @@ internal static class Program
                 using (Pen pen = new Pen(_focused ? CAccent : CBorder)) g.DrawPath(pen, path);
             }
             string shown = _editing ? _text : _value.ToString(CultureInfo.InvariantCulture);
-            DrawInk(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText, false);
+            DrawInk(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText, 0);
             using (Pen pen = new Pen(CBorder)) g.DrawLine(pen, Width - 26, 5, Width - 26, Height - 6);
             Font f = FIconSmall;
             {
-                DrawInk(g, "\uE70E", f, UpRect, _hoverBtn == 0 ? CText : CMuted, true);
-                DrawInk(g, "\uE70D", f, DownRect, _hoverBtn == 1 ? CText : CMuted, true);
+                DrawInk(g, "\uE70E", f, UpRect, _hoverBtn == 0 ? CText : CMuted, 1);
+                DrawInk(g, "\uE70D", f, DownRect, _hoverBtn == 1 ? CText : CMuted, 1);
             }
         }
 
@@ -2249,7 +2254,7 @@ internal static class Program
             }
             if (!string.IsNullOrEmpty(Text))
             {
-                DrawInk(e.Graphics, Text, Font, new Rectangle(x, 0, Math.Max(0, Width - x - 6), Height), fore, false);
+                DrawInk(e.Graphics, Text, Font, new Rectangle(x, 0, Math.Max(0, Width - x - 6), Height), fore, 0);
             }
         }
     }
@@ -2292,7 +2297,7 @@ internal static class Program
                         new Point(box.X + 12, box.Y + 4) });
                 }
             }
-            DrawInk(e.Graphics, Text, Font, new Rectangle(22, 0, Math.Max(0, Width - 24), Height), Enabled ? CText : CMuted, false);
+            DrawInk(e.Graphics, Text, Font, new Rectangle(22, 0, Math.Max(0, Width - 24), Height), Enabled ? CText : CMuted, 0);
         }
     }
 
@@ -2386,8 +2391,7 @@ internal static class Program
             using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, path);
             using (Pen pen = new Pen(line)) g.DrawPath(pen, path);
         }
-        TextRenderer.DrawText(g, text, font, new Rectangle(x + 8, y + 2, 220, 20), fgColor,
-            TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+        DrawInk(g, text, font, r, fgColor, 1);
         return w;
     }
 
@@ -2830,11 +2834,8 @@ internal static class Program
                 int x = 20;
                 int y = 4;
                 string time = n != null ? n.Time : "";
-                using (SolidBrush fg = new SolidBrush(CMuted))
-                    TextRenderer.DrawText(e.Graphics, time, fontSmall, new Rectangle(x, y + 3, 160, 18), fg.Color,
-                    TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
-                SizeF tsz = e.Graphics.MeasureString(time, fontSmall);
-                x += (int)Math.Ceiling(tsz.Width) + 10;
+                int timeW = DrawInk(e.Graphics, time, fontSmall, new Rectangle(x, y, 200, metaPanel.Height), CMuted, 0);
+                x += timeW + 10;
                 if (n != null)
                 {
                     bool unreadMeta = !readIds.Contains(n.Id);
@@ -2854,10 +2855,8 @@ internal static class Program
             listHead.Paint += delegate(object sender2, PaintEventArgs e)
             {
                 using (SolidBrush pb = new SolidBrush(listHead.BackColor)) e.Graphics.FillRectangle(pb, listHead.ClientRectangle);
-                TextRenderer.DrawText(e.Graphics, "通知", fontSmall, new Rectangle(12, 8, 80, 16), CMuted,
-                    TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(e.Graphics, listHeadText, fontSmall, new Rectangle(listHead.Width - 92, 8, 80, 16), CDim,
-                    TextFormatFlags.Right | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+                DrawInk(e.Graphics, "通知", fontSmall, new Rectangle(12, 0, 80, listHead.Height), CMuted, 0);
+                DrawInk(e.Graphics, listHeadText, fontSmall, new Rectangle(listHead.Width - 92, 0, 80, listHead.Height), CDim, 2);
                 using (Pen sep = new Pen(CBorder)) e.Graphics.DrawLine(sep, 0, listHead.Height - 1, listHead.Width, listHead.Height - 1);
             };
 
@@ -2875,7 +2874,7 @@ internal static class Program
                         using (Pen pen = new Pen(sel ? CChipSelLine : CBorderStrong)) e.Graphics.DrawPath(pen, path);
                     }
                     DrawInk(e.Graphics, chipLabels[i], fontChip, new Rectangle(r.X + 9, r.Y, r.Width - 12, r.Height),
-                        sel ? CChipSelText : CChipUnselText, false);
+                        sel ? CChipSelText : CChipUnselText, 0);
                 }
                 using (Pen sep = new Pen(Color.FromArgb(0x3a, 0x3f, 0x47))) e.Graphics.DrawLine(sep, 0, tagPanel.Height - 1, tagPanel.Width, tagPanel.Height - 1);
             };
@@ -2942,14 +2941,11 @@ internal static class Program
                 }
 
                 string timeShort = n.Time.Length >= 16 ? n.Time.Substring(0, 16) : n.Time;
-                Size timeSize = TextRenderer.MeasureText(timeShort, fontSmall, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding);
+                int timeInkW = IconInk(timeShort, fontSmall).Width;
                 int timeRight = r.X + r.Width - 14;
-                if (timeRight - timeSize.Width > cx + 8)
+                if (timeRight - timeInkW > cx + 8)
                 {
-                    TextRenderer.DrawText(g, timeShort, fontSmall,
-                        new Rectangle(timeRight - timeSize.Width, r.Y + 53, timeSize.Width, timeSize.Height),
-                        CDim,
-                        TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                    DrawInk(g, timeShort, fontSmall, new Rectangle(r.X, r.Y + 48, r.Width - 14, 20), CDim, 2);
                 }            };
 
             Action persistRead = delegate
