@@ -17,7 +17,7 @@ using Windows.UI.Notifications;
 
 internal static class Program
 {
-    private const string Version = "0.1.0";
+    private const string Version = "0.1.1";
     private const string Sc3LoginUrl = "https://bot.ftqq.com/login/by/sendkey";
     private const string Sc3InboxUrl = "https://bot.ftqq.com/sc3/push/index";
 
@@ -35,6 +35,40 @@ internal static class Program
     private static DateTime _startUtc = DateTime.UtcNow;
 
     private static string _sendKey = "";
+
+    // 首次运行自建 AUMID：通知里显示的名称与图标（不依赖任何手工注册表操作）
+    private static void RegisterAumid(string baseDir)
+    {
+        try
+        {
+            string icon = Path.Combine(baseDir, "app-icon.png");
+            if (!File.Exists(icon))
+            {
+                try
+                {
+                    using (Icon ic = Icon.ExtractAssociatedIcon(Application.ExecutablePath))
+                    {
+                        if (ic != null) ic.ToBitmap().Save(icon, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+                catch { }
+            }
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes\AppUserModelId\" + _appId))
+            {
+                if (k == null) return;
+                object cur = k.GetValue("DisplayName");
+                if (cur == null || (string)cur != "推送通知") k.SetValue("DisplayName", "推送通知", Microsoft.Win32.RegistryValueKind.String);
+                if (File.Exists(icon))
+                {
+                    object curIcon = k.GetValue("IconUri");
+                    if (curIcon == null || (string)curIcon != icon) k.SetValue("IconUri", icon, Microsoft.Win32.RegistryValueKind.String);
+                }
+                object curBg = k.GetValue("IconBackgroundColor");
+                if (curBg == null) k.SetValue("IconBackgroundColor", "FF6C7CE8", Microsoft.Win32.RegistryValueKind.String);
+            }
+        }
+        catch (Exception ex) { Log("aumid register failed: " + ex.Message); }
+    }
     private static bool _pollEnabled = true;
     private static int _pollInterval = 15;
     private static string _firstRunMode = "import";
@@ -74,6 +108,7 @@ internal static class Program
     {
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
         _logPath = Path.Combine(baseDir, "PushReceiver.log");
+        RegisterAumid(baseDir);
         _storePath = Path.Combine(baseDir, "notifications.jsonl");
         _seenPath = Path.Combine(baseDir, "seen.txt");
         _readPath = Path.Combine(baseDir, "read.txt");
@@ -1715,6 +1750,18 @@ internal static class Program
                 }
                 DrawRow(e.Graphics, row, idx);
             }
+            int partIdx = _top + visible;
+            if (partIdx < _count)
+            {
+                Rectangle partRow = new Rectangle(0, visible * ItemHeight, ClientSize.Width, ItemHeight);
+                bool partSel = (partIdx == _sel);
+                using (SolidBrush rb2 = new SolidBrush(partSel ? CSel : BackColor)) e.Graphics.FillRectangle(rb2, partRow);
+                if (partSel)
+                {
+                    using (SolidBrush bar2 = new SolidBrush(CAccent)) e.Graphics.FillRectangle(bar2, new Rectangle(0, partRow.Y, 3, partRow.Height));
+                }
+                DrawRow(e.Graphics, partRow, partIdx);
+            }
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -2511,6 +2558,21 @@ internal static class Program
                 }
                 catch { }
             };
+            Action<string> markReadById = delegate(string rid)
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(rid) || readIds.Contains(rid)) return;
+                    readIds.Add(rid);
+                    persistRead();
+                    markBtn.Text = "标记未读";
+                    list.Invalidate();
+                    metaPanel.Invalidate();
+                    rebuildChips();
+                }
+                catch { }
+            };
+
             list.SelectedIndexChanged += delegate(object sender2, EventArgs e2)
             {
                 if (loading) return;
@@ -2630,6 +2692,7 @@ internal static class Program
                             }
                             catch { }
                             showCurrent();
+                            markReadById(req);
                             break;
                         }
                     }
@@ -2666,7 +2729,7 @@ internal static class Program
                 }
                 for (int i = 0; i < view.Count; i++)
                 {
-                    if (view[i].Id == wantId) { list.SelectedIndex = i; showCurrent(); break; }
+                    if (view[i].Id == wantId) { list.SelectedIndex = i; showCurrent(); markReadById(wantId); break; }
                 }
             }
 
