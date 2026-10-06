@@ -375,12 +375,34 @@ internal static class Program
         return n;
     }
 
+    private static int _lastUnread = -1;   // 用于识别「未读归零」这一时刻
+
+    // 清空 Windows 侧（操作中心）本应用的通知：清掉后任务栏图标上的未读红点随之消失
+    private static void ClearWindowsToasts()
+    {
+        try
+        {
+            ToastNotificationManager.History.Clear(_appId);
+            Log("cleared windows toasts (action center)");
+        }
+        catch (Exception ex) { Log("clear windows toasts failed: " + ex.Message); }
+    }
+
+    // 当前已无未读时才清（单个已读不会误清）
+    private static void ClearToastsIfAllRead()
+    {
+        try { if (UnreadCount() == 0) ClearWindowsToasts(); }
+        catch { }
+    }
+
     private static void RefreshTrayIcon()
     {
         if (_tray == null) return;
         try
         {
             int unread = UnreadCount();
+            if (unread == 0 && _lastUnread != 0) ClearWindowsToasts();   // 未读归零 → 清操作中心，任务栏红点消失
+            _lastUnread = unread;
             Icon old = _tray.Icon;
             _tray.Icon = BuildTrayIcon(unread > 0);
             if (old != null) old.Dispose();
@@ -1108,6 +1130,7 @@ internal static class Program
             if (act == "read") items.RemoveAll(delegate(Notice n) { return reads.Contains(n.Id); });
             else if (act == "all") items.Clear();
             WriteStore(items);
+            ClearWindowsToasts();    // 清理后清空操作中心
             Log("cleanup(cli): " + act + " -> " + items.Count + " left");
         }
         catch (Exception ex)
@@ -1276,6 +1299,7 @@ internal static class Program
             HashSet<string> ids = LoadReadIds();
             foreach (Notice n in items) ids.Add(n.Id);
             SaveReadIds(ids);
+            ClearWindowsToasts();    // 托盘菜单的「全部标记为已读」同样清空操作中心
             Log("tray: marked all read (" + items.Count + ")");
         }
         catch (Exception ex)
@@ -3104,6 +3128,7 @@ internal static class Program
                     File.WriteAllText(_readPath, sb2.ToString(), new UTF8Encoding(false));
                 }
                 catch { }
+                ClearToastsIfAllRead();   // 标记已读后：若已无未读，顺手清掉操作中心残留
             };
             Action<string> markReadById = delegate(string rid)
             {
@@ -3160,6 +3185,7 @@ internal static class Program
                     if (!readIds.Contains(n8.Id)) { readIds.Add(n8.Id); added++; }
                 }
                 persistRead();
+                ClearWindowsToasts();    // 方案 A：全部已读时清空操作中心
                 list.Invalidate();
                 metaPanel.Invalidate();
                 int ui2 = chipFilters.IndexOf("\u0001unread");
@@ -3197,6 +3223,7 @@ internal static class Program
                 current = null;
                 rebuildChips();
                 refreshList();
+                ClearWindowsToasts();    // 方案 A：清理时清空操作中心
                 Log("cleanup: " + act + " -> " + all.Count + " left");
             };
             settingsBtn.Click += delegate(object sender2, EventArgs e2) { OpenSettings(); };
