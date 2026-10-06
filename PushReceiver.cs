@@ -17,7 +17,7 @@ using Windows.UI.Notifications;
 
 internal static class Program
 {
-    private const string Version = "0.1.1";
+    private const string Version = "0.1.5";
     private const string Sc3LoginUrl = "https://bot.ftqq.com/login/by/sendkey";
     private const string Sc3InboxUrl = "https://bot.ftqq.com/sc3/push/index";
 
@@ -1220,12 +1220,21 @@ internal static class Program
             keyBox.BackColor = CField;
             keyBox.ForeColor = CText;
             keyBox.Font = fontBase;
-            keyBox.SetBounds(12, 8, 400, 22);
+            keyBox.SetBounds(12, 5, 372, 22);
             keyBox.Text = _sendKey;
             keyBox.UseSystemPasswordChar = true;
+            keyBox.TabStop = false;
             keyWrap.Controls.Add(keyBox);
 
-            CheckBox showKey = FlatCheckBox("显示", 456, 46, 80, false);
+            EyeToggle eye = new EyeToggle();
+            eye.SetBounds(keyWrap.Width - 34, 0, 33, keyWrap.Height);
+            eye.Click += delegate(object s2, EventArgs e2)
+            {
+                keyBox.UseSystemPasswordChar = !keyBox.UseSystemPasswordChar;
+                eye.Revealed = !keyBox.UseSystemPasswordChar;
+                eye.Invalidate();
+            };
+            keyWrap.Controls.Add(eye);
 
             Button getKey = FlatButton("打开 SendKey 页面", "\uE774", 20, 84, 194, false);
 
@@ -1237,20 +1246,23 @@ internal static class Program
 
             CheckBox tagChk = FlatCheckBox("通知标题显示 [标签]", 300, 146, 260, _toastTag);
 
+            Label verLabel = new Label();
+            verLabel.Text = "版本 " + Version;
+            verLabel.SetBounds(20, 400, 220, 18);
+            verLabel.ForeColor = Color.FromArgb(0x6b, 0x71, 0x7a);
+            verLabel.Font = fontSmall;
+
             Label lblInt = new Label();
             lblInt.Text = "轮询间隔（秒）";
             lblInt.SetBounds(20, 186, 100, 22);
             lblInt.ForeColor = CMuted;
             lblInt.Font = fontSmall;
 
-            NumericUpDown interval = new NumericUpDown();
-            interval.SetBounds(128, 182, 90, 26);
+            NumberField interval = new NumberField();
+            interval.SetBounds(128, 182, 100, 28);
             interval.Minimum = 5;
             interval.Maximum = 3600;
             interval.Value = Math.Min(3600, Math.Max(5, _pollInterval));
-            interval.BackColor = CField;
-            interval.ForeColor = CText;
-            interval.BorderStyle = BorderStyle.FixedSingle;
 
             string[] statusLines = new string[] { "", "", "" };
             Color[] statusColors = new Color[] { CText, CMuted, Color.FromArgb(0x6e, 0xcf, 0x8f) };
@@ -1320,7 +1332,6 @@ internal static class Program
 
             f.Controls.Add(lblKey);
             f.Controls.Add(keyWrap);
-            f.Controls.Add(showKey);
             f.Controls.Add(getKey);
             f.Controls.Add(sep1);
             f.Controls.Add(pollChk);
@@ -1328,9 +1339,9 @@ internal static class Program
             f.Controls.Add(lblInt);
             f.Controls.Add(interval);
             f.Controls.Add(statusCard);
+            f.Controls.Add(verLabel);
             f.Controls.Add(footer);
 
-            showKey.CheckedChanged += delegate(object s2, EventArgs e2) { keyBox.UseSystemPasswordChar = !showKey.Checked; };
             getKey.Click += delegate(object s2, EventArgs e2) { try { Process.Start("https://sc3.ft07.com/sendkey"); } catch { } };
 
             test.Click += delegate(object s2, EventArgs e2)
@@ -1423,6 +1434,7 @@ internal static class Program
             close.Click += delegate(object s2, EventArgs e2) { f.Close(); };
 
             f.Shown += delegate { try { f.Invalidate(true); f.Update(); } catch { } };
+            f.Shown += delegate { try { f.ActiveControl = null; } catch { } };
             ApplyDarkScrollbars(keyBox);
             ApplyDarkScrollbars(interval);
             refreshStatus();
@@ -1581,6 +1593,158 @@ internal static class Program
         TextRenderer.DrawText(g, text, font, r, CChipText,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         usedWidth = w;
+    }
+
+    // 密码框的“显示/隐藏”眼睛：只画字形，不画任何底框（灰度抗锯齿，避免 ClearType 彩边）
+    private sealed class EyeToggle : Control
+    {
+        public bool Revealed = false;
+        private bool _hover = false;
+        private static Font _f = null;
+
+        public EyeToggle()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Cursor = Cursors.Hand;
+        }
+
+        private static Font Glyph()
+        {
+            if (_f == null)
+            {
+                try { _f = new Font("Segoe MDL2 Assets", 13F); } catch { _f = SystemFonts.DefaultFont; }
+            }
+            return _f;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            using (SolidBrush pb = new SolidBrush(Parent != null ? Parent.BackColor : CField))
+                e.Graphics.FillRectangle(pb, ClientRectangle);
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+            string g = Revealed ? "\uED1A" : "\uE7B3";   // 眼睛 / 划掉的眼睛（Fluent 与 MDL2 下都能清晰成像）
+            Color c = _hover ? Color.White : Color.FromArgb(0xc2, 0xc8, 0xd1);
+            Font f = Glyph();
+            SizeF sz = e.Graphics.MeasureString(g, f);
+            using (SolidBrush fb = new SolidBrush(c))
+                e.Graphics.DrawString(g, f, fb, (Width - sz.Width) / 2f, (Height - sz.Height) / 2f);
+        }
+    }
+
+    private sealed class NumberField : Control
+    {
+        public int Minimum = 1;
+        public int Maximum = 9999;
+        public event EventHandler ValueChanged;
+        private int _value = 1;
+        private string _text = "";
+        private bool _editing;
+        private bool _focused;
+        private int _hoverBtn = -1;
+
+        public NumberField()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+            try { Font = new Font("Microsoft YaHei UI", 9F); } catch { Font = SystemFonts.DefaultFont; }
+            Cursor = Cursors.IBeam;
+        }
+
+        public int Value
+        {
+            get { return _value; }
+            set
+            {
+                int v = value;
+                if (v < Minimum) v = Minimum;
+                if (v > Maximum) v = Maximum;
+                bool changed = (v != _value);
+                _value = v;
+                _text = v.ToString(CultureInfo.InvariantCulture);
+                Invalidate();
+                if (changed && ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+            }
+        }
+
+        private Rectangle UpRect { get { return new Rectangle(Width - 26, 2, 22, Height / 2 - 2); } }
+        private Rectangle DownRect { get { return new Rectangle(Width - 26, Height / 2, 22, Height / 2 - 2); } }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            using (SolidBrush pb = new SolidBrush(Parent != null ? Parent.BackColor : CPanel)) g.FillRectangle(pb, ClientRectangle);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
+            {
+                using (SolidBrush b = new SolidBrush(CField)) g.FillPath(b, path);
+                using (Pen pen = new Pen(_focused ? CAccent : CBorder)) g.DrawPath(pen, path);
+            }
+            string shown = _editing ? _text : _value.ToString(CultureInfo.InvariantCulture);
+            TextRenderer.DrawText(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            using (Pen pen = new Pen(CBorder)) g.DrawLine(pen, Width - 26, 5, Width - 26, Height - 6);
+            using (Font f = new Font("Segoe MDL2 Assets", 7F))
+            {
+                TextRenderer.DrawText(g, "\uE70E", f, UpRect, _hoverBtn == 0 ? CText : CMuted,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, "\uE70D", f, DownRect, _hoverBtn == 1 ? CText : CMuted,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            Focus();
+            if (UpRect.Contains(e.Location)) { Value = _value + 1; return; }
+            if (DownRect.Contains(e.Location)) { Value = _value - 1; return; }
+            _editing = true;
+            _text = _value.ToString(CultureInfo.InvariantCulture);
+            Invalidate();
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int h = UpRect.Contains(e.Location) ? 0 : (DownRect.Contains(e.Location) ? 1 : -1);
+            if (h != _hoverBtn) { _hoverBtn = h; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hoverBtn = -1; Invalidate(); }
+
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); _focused = true; Invalidate(); }
+
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+            _focused = false;
+            Commit();
+        }
+
+        private void Commit()
+        {
+            int v;
+            if (int.TryParse(_text, out v)) Value = v;
+            _editing = false;
+            _text = _value.ToString(CultureInfo.InvariantCulture);
+            Invalidate();
+        }
+
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            base.OnKeyPress(e);
+            if (!_editing) { _editing = true; _text = ""; }
+            if (e.KeyChar == (char)13) { Commit(); e.Handled = true; return; }
+            if (e.KeyChar == (char)27) { _editing = false; _text = _value.ToString(CultureInfo.InvariantCulture); Invalidate(); e.Handled = true; return; }
+            if (e.KeyChar == (char)8) { if (_text.Length > 0) _text = _text.Substring(0, _text.Length - 1); Invalidate(); e.Handled = true; return; }
+            if (!char.IsDigit(e.KeyChar)) { e.Handled = true; return; }
+            if (_text.Length >= 5) { e.Handled = true; return; }
+            _text += e.KeyChar;
+            Invalidate();
+        }
     }
 
     private sealed class CapsuleBar : Control
