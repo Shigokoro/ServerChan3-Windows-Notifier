@@ -1832,6 +1832,7 @@ internal static class Program
         private int _value = 1;
         private string _text = "";
         private bool _editing;
+        private bool _selectAll;   // 点击进入编辑时全选，输入即替换（给出可见的“选中”效果）
         private bool _focused;
         private int _hoverBtn = -1;
 
@@ -1872,7 +1873,24 @@ internal static class Program
                 using (Pen pen = new Pen(_focused ? CAccent : CBorder)) g.DrawPath(pen, path);
             }
             string shown = _editing ? _text : _value.ToString(CultureInfo.InvariantCulture);
-            DrawInk(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText, 0);
+            Rectangle tb = new Rectangle(11, 0, Width - 44, Height);
+            if (_editing && _selectAll && shown.Length > 0)
+            {
+                // 选中态：文字下方铺一层高亮（与输入框同族的强调色），让“已选中”可见
+                Rectangle tInk = IconInk(shown, Font);
+                int tw = tInk.Width + 4;
+                int tx = tb.X + 2;
+                using (System.Drawing.Drawing2D.GraphicsPath sp = RoundRect(new Rectangle(tx, Height / 2 - 9, tw, 18), 4))
+                using (SolidBrush sb2 = new SolidBrush(Color.FromArgb(0x4a, 0x59, 0x9e))) g.FillPath(sb2, sp);
+            }
+            DrawInk(g, shown, Font, tb, CText, 0);
+            if (_editing && !_selectAll)
+            {
+                // 光标：未全选时在文字右侧画一根竖线
+                Rectangle cInk = IconInk(shown, Font);
+                int cx2 = tb.X + cInk.Width + 3;
+                using (Pen cp = new Pen(CText)) g.DrawLine(cp, cx2, Height / 2 - 8, cx2, Height / 2 + 8);
+            }
             using (Pen pen = new Pen(CBorder)) g.DrawLine(pen, Width - 26, 5, Width - 26, Height - 6);
             Font f = FIconSmall;
             {
@@ -1888,6 +1906,7 @@ internal static class Program
             if (UpRect.Contains(e.Location)) { Value = _value + 1; return; }
             if (DownRect.Contains(e.Location)) { Value = _value - 1; return; }
             _editing = true;
+            _selectAll = true;          // 点进来先全选：直接输入即可替换，且有可见的选中高亮
             _text = _value.ToString(CultureInfo.InvariantCulture);
             Invalidate();
         }
@@ -1918,6 +1937,7 @@ internal static class Program
             int v;
             if (int.TryParse(_text, out v)) Value = v;
             _editing = false;
+            _selectAll = false;
             _text = _value.ToString(CultureInfo.InvariantCulture);
             Invalidate();
         }
@@ -1925,8 +1945,9 @@ internal static class Program
         protected override void OnKeyPress(KeyPressEventArgs e)
         {
             base.OnKeyPress(e);
-            if (!_editing) { _editing = true; _text = ""; }
-            if (e.KeyChar == (char)13) { Commit(); e.Handled = true; return; }
+            if (!_editing) { _editing = true; _text = ""; _selectAll = false; }
+            if (_selectAll && (char.IsDigit(e.KeyChar) || e.KeyChar == (char)8)) { _text = ""; _selectAll = false; }
+            if (e.KeyChar == (char)13) { Commit(); _selectAll = false; e.Handled = true; return; }
             if (e.KeyChar == (char)27) { _editing = false; _text = _value.ToString(CultureInfo.InvariantCulture); Invalidate(); e.Handled = true; return; }
             if (e.KeyChar == (char)8) { if (_text.Length > 0) _text = _text.Substring(0, _text.Length - 1); Invalidate(); e.Handled = true; return; }
             if (!char.IsDigit(e.KeyChar)) { e.Handled = true; return; }
@@ -2579,11 +2600,11 @@ internal static class Program
             catTitle.ForeColor = CMuted;
             catTitle.Font = fontSmall;
 
-            Button markAllBtn = FlatButton("", "\uE8FB", 222, 5, 26, false);
+            Button markAllBtn = FlatButton("", "\uE8FB", 222, 5, 28, false);
             markAllBtn.Height = 26;
-            Button cleanBtn = FlatButton("", "\uE74D", 252, 5, 26, false);
+            Button cleanBtn = FlatButton("", "\uE74D", 252, 5, 28, false);
             cleanBtn.Height = 26;
-            Button settingsBtn = FlatButton("", "\uE713", 282, 5, 26, true);
+            Button settingsBtn = FlatButton("", "\uE713", 282, 5, 28, true);
             settingsBtn.Height = 26;
 
             ToolTip tips = new ToolTip();
