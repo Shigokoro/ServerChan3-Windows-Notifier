@@ -115,7 +115,7 @@ internal static class Program
                 {
                     for (int x = 0; x < bw; x++)
                     {
-                        if (bm.GetPixel(x, y).R > 40)
+                        if (bm.GetPixel(x, y).R > 96)   // 只认亮核：含抗锯齿边缘会把细笔画撑大，视觉中心就偏了
                         {
                             if (x < minx) minx = x;
                             if (x > maxx) maxx = x;
@@ -1489,6 +1489,7 @@ internal static class Program
             save.Click += delegate(object s2, EventArgs e2)
             {
                 string k = keyBox.Text.Trim();
+                interval.CommitNow();          // 先落定输入框里正在编辑的值，再读取（自定义按钮不会让输入框失焦）
                 Dictionary<string, string> kv = new Dictionary<string, string>();
                 kv["sendkey"] = k;
                 kv["poll"] = pollChk.Checked ? "1" : "0";
@@ -1895,6 +1896,9 @@ internal static class Program
         {
             base.OnMouseMove(e);
             int h = UpRect.Contains(e.Location) ? 0 : (DownRect.Contains(e.Location) ? 1 : -1);
+            // 光标按区域区分：箭头区用默认箭头，文本区才是输入光标（原来整控件都是 IBeam）
+            Cursor want = h >= 0 ? Cursors.Default : Cursors.IBeam;
+            if (Cursor != want) Cursor = want;
             if (h != _hoverBtn) { _hoverBtn = h; Invalidate(); }
         }
 
@@ -1928,7 +1932,31 @@ internal static class Program
             if (!char.IsDigit(e.KeyChar)) { e.Handled = true; return; }
             if (_text.Length >= 5) { e.Handled = true; return; }
             _text += e.KeyChar;
+            ApplyText();          // 即时生效：不必等回车/失焦（自定义按钮不会让输入框失焦，否则输入会被丢掉）
             Invalidate();
+        }
+
+        // 输入框当前文本若合法则立即生效（供键盘输入与保存前调用）
+        private void ApplyText()
+        {
+            int v;
+            if (int.TryParse(_text, out v))
+            {
+                if (v < Minimum) v = Minimum;
+                if (v > Maximum) v = Maximum;
+                if (v != _value)
+                {
+                    _value = v;
+                    if (ValueChanged != null) ValueChanged(this, EventArgs.Empty);
+                }
+            }
+        }
+
+        // 供外部（如保存按钮）在读取 Value 之前强制落定当前输入
+        public void CommitNow()
+        {
+            if (_editing) ApplyText();
+            Commit();
         }
     }
 
@@ -2256,22 +2284,24 @@ internal static class Program
                 using (SolidBrush b = new SolidBrush(back)) e.Graphics.FillPath(b, path);
                 using (Pen pen = new Pen(line)) e.Graphics.DrawPath(pen, path);
             }
-            int x = 11;
-            if (!string.IsNullOrEmpty(Glyph))
+            // 图标 + 文字作为「一整组」水平居中（原固定 x=11 左对齐 → 实测 dx = -2.5 ~ -11px）
+            Font gf = string.IsNullOrEmpty(Glyph) ? null : GlyphFont();
+            Rectangle gInk = gf != null ? IconInk(Glyph, gf) : Rectangle.Empty;
+            // 度量与绘制必须同族：两者都按墨迹宽/墨迹落位（推进宽含左右边距，混用会留系统偏差）
+            Rectangle tInk = string.IsNullOrEmpty(Text) ? Rectangle.Empty : IconInk(Text, Font);
+            int gap = (gf != null && !string.IsNullOrEmpty(Text)) ? 4 : 0;
+            int totalW = (gf != null ? gInk.Width : 0) + gap + tInk.Width;
+            int cx = Math.Max(6, (Width - totalW) / 2);
+            if (gf != null)
             {
-                Font gf = GlyphFont();
-                Rectangle ink = IconInk(Glyph, gf);
-                int inkLeft = string.IsNullOrEmpty(Text) ? (Width - ink.Width) / 2 : x;
-                int inkTop = (Height - ink.Height) / 2;
-                int gx = inkLeft - ink.X;
-                int gy = inkTop - ink.Y;
-                TextRenderer.DrawText(e.Graphics, Glyph, gf, new Point(gx, gy), fore,
+                int gy = (Height - gInk.Height) / 2 - gInk.Y;
+                TextRenderer.DrawText(e.Graphics, Glyph, gf, new Point(cx - gInk.X, gy), fore,
                     TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
-                x = inkLeft + ink.Width + 4;
+                cx += gInk.Width + gap;
             }
             if (!string.IsNullOrEmpty(Text))
             {
-                DrawInk(e.Graphics, Text, Font, new Rectangle(x, 0, Math.Max(0, Width - x - 6), Height), fore, 0);
+                DrawInk(e.Graphics, Text, Font, new Rectangle(cx, 0, Math.Max(0, Width - cx), Height), fore, 0);
             }
         }
     }
@@ -2549,7 +2579,7 @@ internal static class Program
             catTitle.ForeColor = CMuted;
             catTitle.Font = fontSmall;
 
-            Button markAllBtn = FlatButton("", "\uE73E", 222, 5, 26, false);
+            Button markAllBtn = FlatButton("", "\uE8FB", 222, 5, 26, false);
             markAllBtn.Height = 26;
             Button cleanBtn = FlatButton("", "\uE74D", 252, 5, 26, false);
             cleanBtn.Height = 26;
@@ -2675,7 +2705,7 @@ internal static class Program
             footer.Height = 52;
             footer.BackColor = CPanel2;
 
-            Button markBtn = FlatButton("标记未读", "\uE73E", 0, 10, 110, false);
+            Button markBtn = FlatButton("标记未读", "\uE8FB", 0, 10, 110, false);
             Button closeBtn = FlatButton("关闭", "\uE711", 0, 10, 88, false);
             footer.Controls.Add(markBtn);
             footer.Controls.Add(closeBtn);
