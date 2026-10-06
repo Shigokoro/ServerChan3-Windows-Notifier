@@ -1876,11 +1876,11 @@ internal static class Program
             Rectangle tb = new Rectangle(11, 0, Width - 44, Height);
             if (_editing && _selectAll && shown.Length > 0)
             {
-                // 选中态：文字下方铺一层高亮（与输入框同族的强调色），让“已选中”可见
+                // 选中态：高亮框必须由「同一个墨迹框」派生（位置/尺寸都跟着墨迹走，不能用估算的偏移）
                 Rectangle tInk = IconInk(shown, Font);
-                int tw = tInk.Width + 4;
-                int tx = tb.X + 2;
-                using (System.Drawing.Drawing2D.GraphicsPath sp = RoundRect(new Rectangle(tx, Height / 2 - 9, tw, 18), 4))
+                int hx = tb.X - 3;      // 与 DrawInk(align=0) 的落位一致：墨迹左缘落在 tb.X
+                int hy = tb.Y + (tb.Height - tInk.Height) / 2 - 3;
+                using (System.Drawing.Drawing2D.GraphicsPath sp = RoundRect(new Rectangle(hx, hy, tInk.Width + 6, tInk.Height + 6), 4))
                 using (SolidBrush sb2 = new SolidBrush(Color.FromArgb(0x4a, 0x59, 0x9e))) g.FillPath(sb2, sp);
             }
             DrawInk(g, shown, Font, tb, CText, 0);
