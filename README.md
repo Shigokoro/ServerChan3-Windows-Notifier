@@ -3,9 +3,9 @@
 > 把 [Server酱³](https://sc3.ft07.com/) 的消息变成 **Windows 原生通知**（进通知中心），点击通知打开**本地详情窗口**——按标签分类、可标记已读/未读、可清理，**不跳浏览器**。
 > 单个 C# 文件、单个 exe：.NET Framework + WinRT，**无第三方依赖**，常驻内存约 35 MB。
 
-![界面预览](ui-mockup.png)
+![界面预览](ui-preview.png)
 
-> 上图为设计效果图（HTML 稿），最终 WinForms 实现与之一致。
+> 上图为**当前版本的真实界面截图**（WinForms 实现，Windows 11 / 125% 缩放）；图中数据为演示用合成数据，非真实推送内容。
 
 **命名说明**：仓库名 = `ServerChan3-Windows-Notifier`（Server酱³ 的 Windows 接收通知器）；编译产物 = `WinPushReceiver.exe`（单文件、无依赖，扔哪都能跑）。
 
@@ -15,8 +15,9 @@
 
 1. **[Hurk1n/ServerChanDesktop](https://github.com/Hurk1n/ServerChanDesktop)** —— 桌面版接收器，其逆向笔记（`REVERSE_NOTES.md`）首次公开了 Server酱³ **收件箱接口**的线索（`bot.ftqq.com` 登录换 token + 分页拉取）。没有它，这个项目不会存在。
 2. **[Server酱](https://sc3.ft07.com/)（方糖 @ Easy）** —— 推送服务本体，发送侧走它的官方接口。本项目只是它消息的一个 Windows 端消费者，**与官方无隶属关系**。
+3. **[DeepSeek](https://www.deepseek.com/)** —— 本项目的代码、界面与文档，是在 **DeepSeek Harness（DSH）** 里与 DeepSeek 模型（`deepseek-flash`）协作完成的：接口验证、WinForms 自绘界面（列表行 / 胶囊滚动条 / 圆角标题栏）、构建脚本与发布流程。作者负责需求、取舍与验收。
 
-本项目与上述两者的差异：**单文件 C# / 零第三方依赖 / 常驻约 35 MB / 本地详情窗口（标签分类 + 已读未读 + 清理）/ 全量回捞历史**。
+本项目与上述三者的差异：**单文件 C# / 零第三方依赖 / 常驻约 35 MB / 本地详情窗口（标签分类 + 已读未读 + 清理）/ 全量回捞历史**。
 
 ## 特性
 

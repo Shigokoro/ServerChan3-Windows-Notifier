@@ -13,7 +13,8 @@ nav.txt
 
 # 界面截图：除效果图外一律排除（含真实通知内容）
 ui-*.png
-!ui-mockup.png
+!ui-preview.png
+ui-mockup.*
 icon-from-exe.png
 
 # 系统/编辑器
