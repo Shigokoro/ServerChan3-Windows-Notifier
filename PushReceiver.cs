@@ -27,12 +27,22 @@ internal static class Program
     private static string _appId = "Pusher.Win.Receiver";
     private static string _clickMode = "window";
     private static bool _logEnabled = true;
-    private static string _logPath = "PushReceiver.log";
-    private static string _storePath = "notifications.jsonl";
-    private static string _seenPath = "seen.txt";
-    private static string _readPath = "read.txt";
+    private static string _logPath = LogFile;
+    private static string _storePath = StoreFile;
+    private static string _seenPath = SeenFile;
+    private static string _readPath = ReadFile;
     private static long _count = 0;
     private static DateTime _startUtc = DateTime.UtcNow;
+
+    private const string AppTitle = "Server酱3 推送通知";
+    private const string StoreFile = "notifications.jsonl";
+    private const string SeenFile = "seen.txt";
+    private const string ReadFile = "read.txt";
+    private const string NavFile = "nav.txt";
+    private const string IniFile = "PushReceiver.ini";
+    private const string LogFile = "PushReceiver.log";
+    private const int PollMinSeconds = 5;
+    private const int PollMaxSeconds = 3600;
 
     private static string _sendKey = "";
 
@@ -175,12 +185,12 @@ internal static class Program
     private static void Main(string[] args)
     {
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        _logPath = Path.Combine(baseDir, "PushReceiver.log");
+        _logPath = Path.Combine(baseDir, LogFile);
         RegisterAumid(baseDir);
-        _storePath = Path.Combine(baseDir, "notifications.jsonl");
-        _seenPath = Path.Combine(baseDir, "seen.txt");
-        _readPath = Path.Combine(baseDir, "read.txt");
-        LoadConfig(Path.Combine(baseDir, "PushReceiver.ini"));
+        _storePath = Path.Combine(baseDir, StoreFile);
+        _seenPath = Path.Combine(baseDir, SeenFile);
+        _readPath = Path.Combine(baseDir, ReadFile);
+        LoadConfig(Path.Combine(baseDir, IniFile));
 
         foreach (string a in args)
         {
@@ -196,7 +206,7 @@ internal static class Program
                 {
                     if (!settingsNew)
                     {
-                        ActivateExisting("Server酱3 推送通知 · 设置");
+                        ActivateExisting(AppTitle + " · 设置");
                         return;
                     }
                     RunSettings();
@@ -213,10 +223,10 @@ internal static class Program
                         try
                         {
                             string req = QueryValue(a.Contains("?") ? a.Substring(a.IndexOf('?') + 1) : "", "id");
-                            File.WriteAllText(Path.Combine(baseDir, "nav.txt"), req == null ? "" : req, new UTF8Encoding(false));
+                            File.WriteAllText(Path.Combine(baseDir, NavFile), req == null ? "" : req, new UTF8Encoding(false));
                         }
                         catch { }
-                        ActivateExisting("Server酱3 推送通知");
+                        ActivateExisting(AppTitle);
                         return;
                     }
                     RunViewer(a);
@@ -265,7 +275,7 @@ internal static class Program
 
                 NotifyIcon tray = new NotifyIcon();
                 try { tray.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-                tray.Text = "Server酱3 推送通知";
+                tray.Text = AppTitle;
                 ContextMenuStrip menu = new ContextMenuStrip();
                 menu.Renderer = new DarkMenuRenderer();
                 menu.ShowImageMargin = false;
@@ -335,7 +345,7 @@ internal static class Program
                     break;
                 case "poll_interval":
                     int pi;
-                    if (int.TryParse(v, out pi) && pi >= 5 && pi <= 3600) _pollInterval = pi;
+                    if (int.TryParse(v, out pi)) _pollInterval = Math.Min(PollMaxSeconds, Math.Max(PollMinSeconds, pi));
                     break;
                 case "firstrun":
                     if (v.Length > 0) _firstRunMode = v.ToLowerInvariant();
@@ -358,9 +368,9 @@ internal static class Program
             "# WinPushReceiver config",
             "# listen: 127.0.0.1 (local only) or 0.0.0.0 (LAN, set token!)",
             "listen=127.0.0.1",
-            "port=8765",
+            "port=" + _port,
             "token=",
-            "appid=Pusher.Win.Receiver",
+            "appid=" + _appId,
             "# click: window = 点击通知打开本地详情窗口; url = 直接打开消息里的链接",
             "click=window",
             "log=1",
@@ -801,7 +811,7 @@ internal static class Program
 
                 if (method == "GET" && pathOnly == "/reload")
                 {
-                    LoadConfig(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PushReceiver.ini"));
+                    LoadConfig(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, IniFile));
                     _sc3Token = "";
                     _syncNow.Set();
                     Respond(stream, 200, "{\"ok\":true,\"reloaded\":true,\"sendkeyConfigured\":" + (_sendKey.Length > 0 ? "true" : "false") + "}");
@@ -1030,7 +1040,7 @@ internal static class Program
     {
         Form d = new Form();
         try { d.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-        d.Text = "Server酱3 推送通知 · 清理";
+        d.Text = AppTitle + " · 清理";
         d.ClientSize = new Size(490, 200);
         d.StartPosition = FormStartPosition.CenterParent;
         d.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1135,7 +1145,7 @@ internal static class Program
     private sealed class DarkColors : ProfessionalColorTable
     {
         public override Color MenuItemSelected { get { return Color.FromArgb(0x2f, 0x33, 0x3a); } }
-        public override Color MenuItemBorder { get { return Color.FromArgb(0x3a, 0x3e, 0x45); } }
+        public override Color MenuItemBorder { get { return CBorderStrong; } }
         public override Color ToolStripDropDownBackground { get { return CPanel2; } }
         public override Color ImageMarginGradientBegin { get { return CPanel2; } }
         public override Color ImageMarginGradientMiddle { get { return CPanel2; } }
@@ -1251,7 +1261,7 @@ internal static class Program
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PushReceiver.ini");
+            string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, IniFile);
 
             Font fontBase, fontSmall;
             fontBase = FBase;
@@ -1259,7 +1269,7 @@ internal static class Program
 
             Form f = new Form();
             try { f.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-            f.Text = "Server酱3 推送通知 · 设置";
+            f.Text = AppTitle + " · 设置";
             f.ClientSize = new Size(644, 470);
             f.StartPosition = FormStartPosition.CenterScreen;
             f.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -1325,7 +1335,7 @@ internal static class Program
             Label verLabel = new Label();
             verLabel.Text = "版本 " + Version;
             verLabel.SetBounds(20, 400, 220, 18);
-            verLabel.ForeColor = Color.FromArgb(0x6b, 0x71, 0x7a);
+            verLabel.ForeColor = CDim;
             verLabel.Font = fontSmall;
 
             Label lblInt = new Label();
@@ -1336,12 +1346,12 @@ internal static class Program
 
             NumberField interval = new NumberField();
             interval.SetBounds(128, 182, 100, 28);
-            interval.Minimum = 5;
-            interval.Maximum = 3600;
-            interval.Value = Math.Min(3600, Math.Max(5, _pollInterval));
+            interval.Minimum = PollMinSeconds;
+            interval.Maximum = PollMaxSeconds;
+            interval.Value = Math.Min(PollMaxSeconds, Math.Max(PollMinSeconds, _pollInterval));
 
             string[] statusLines = new string[] { "", "", "" };
-            Color[] statusColors = new Color[] { CText, CMuted, Color.FromArgb(0x6e, 0xcf, 0x8f) };
+            Color[] statusColors = new Color[] { CText, CMuted, COk };
 
             Panel statusCard = new Panel();
             statusCard.SetBounds(20, 224, 604, 106);
@@ -1395,12 +1405,12 @@ internal static class Program
                     statusColors[1] = CMuted;
                     string err = sc3 != null ? Nz(Field(sc3, "lastError")) : "";
                     statusLines[2] = err.Length > 0 ? ("上次错误：" + err) : "状态正常";
-                    statusColors[2] = err.Length > 0 ? Color.FromArgb(0xe2, 0xb0, 0x4a) : Color.FromArgb(0x6e, 0xcf, 0x8f);
+                    statusColors[2] = err.Length > 0 ? CWarn : COk;
                 }
                 catch (Exception ex)
                 {
                     statusLines[1] = "守护进程：未响应（" + ex.Message + "）";
-                    statusColors[1] = Color.FromArgb(0xe2, 0xb0, 0x4a);
+                    statusColors[1] = CWarn;
                     statusLines[2] = "保存后配置仍会写入文件，下次启动生效。";
                     statusColors[2] = CMuted;
                 }
@@ -1424,7 +1434,7 @@ internal static class Program
             test.Click += delegate(object s2, EventArgs e2)
             {
                 string k = keyBox.Text.Trim();
-                if (k.Length == 0) { statusLines[2] = "请先填入 SendKey。"; statusColors[2] = Color.FromArgb(0xe2, 0xb0, 0x4a); statusCard.Invalidate(); return; }
+                if (k.Length == 0) { statusLines[2] = "请先填入 SendKey。"; statusColors[2] = CWarn; statusCard.Invalidate(); return; }
                 statusLines[2] = "正在测试连接…";
                 statusColors[2] = CMuted;
                 statusCard.Invalidate();
@@ -1442,18 +1452,18 @@ internal static class Program
                     if (!string.IsNullOrEmpty(tk))
                     {
                         statusLines[2] = "连接成功：已取得 token（长度 " + tk.Length + "）。点「保存并同步」生效。";
-                        statusColors[2] = Color.FromArgb(0x6e, 0xcf, 0x8f);
+                        statusColors[2] = COk;
                     }
                     else
                     {
                         statusLines[2] = "登录被拒绝：" + (Field(root, "error") != null ? Field(root, "error") : json.Substring(0, Math.Min(140, json.Length)));
-                        statusColors[2] = Color.FromArgb(0xff, 0x8a, 0x8a);
+                        statusColors[2] = CErr;
                     }
                 }
                 catch (Exception ex)
                 {
                     statusLines[2] = "测试失败：" + ex.Message;
-                    statusColors[2] = Color.FromArgb(0xff, 0x8a, 0x8a);
+                    statusColors[2] = CErr;
                 }
                 statusCard.Invalidate();
             };
@@ -1473,7 +1483,7 @@ internal static class Program
                 catch (Exception ex)
                 {
                     statusLines[2] = "写入配置失败：" + ex.Message;
-                    statusColors[2] = Color.FromArgb(0xff, 0x8a, 0x8a);
+                    statusColors[2] = CErr;
                     statusCard.Invalidate();
                     return;
                 }
@@ -1482,12 +1492,12 @@ internal static class Program
                 {
                     HttpRequest("http://127.0.0.1:" + _port + "/reload", "GET", null, null);
                     statusLines[2] = "已保存并已通知守护进程重载。" + hint;
-                    statusColors[2] = Color.FromArgb(0x6e, 0xcf, 0x8f);
+                    statusColors[2] = COk;
                 }
                 catch (Exception ex)
                 {
                     statusLines[2] = "已保存，但守护进程未响应（" + ex.Message + "），下次启动生效。" + hint;
-                    statusColors[2] = Color.FromArgb(0xe2, 0xb0, 0x4a);
+                    statusColors[2] = CWarn;
                 }
                 statusCard.Invalidate();
             };
@@ -1498,12 +1508,12 @@ internal static class Program
                 {
                     string rj = HttpRequest("http://127.0.0.1:" + _port + "/sync?full=1", "GET", null, null);
                     statusLines[2] = "已重新拉取服务器历史通知：" + rj;
-                    statusColors[2] = Color.FromArgb(0x6e, 0xcf, 0x8f);
+                    statusColors[2] = COk;
                 }
                 catch (Exception ex)
                 {
                     statusLines[2] = "同步请求失败：" + ex.Message;
-                    statusColors[2] = Color.FromArgb(0xff, 0x8a, 0x8a);
+                    statusColors[2] = CErr;
                 }
                 statusCard.Invalidate();
             };
@@ -1646,6 +1656,19 @@ internal static class Program
     private static readonly Color CChipBg = Color.FromArgb(0x23, 0x2a, 0x44);
     private static readonly Color CChipLine = Color.FromArgb(0x3f, 0x4d, 0x80);
     private static readonly Color CChipText = Color.FromArgb(0xa9, 0xb8, 0xff);
+    // 语义色（原先散落在各处内联，2026-10-07 收敛；同一语义只允许这一处定义）
+    private static readonly Color CTextStrong = Color.FromArgb(0xdf, 0xe2, 0xe7);
+    private static readonly Color CDim = Color.FromArgb(0x6b, 0x71, 0x7a);
+    private static readonly Color COk = Color.FromArgb(0x6e, 0xcf, 0x8f);
+    private static readonly Color CWarn = Color.FromArgb(0xe2, 0xb0, 0x4a);
+    private static readonly Color CErr = Color.FromArgb(0xff, 0x8a, 0x8a);
+    private static readonly Color CBorderStrong = Color.FromArgb(0x3a, 0x3e, 0x45);
+    private static readonly Color CAccentLine = Color.FromArgb(0x55, 0x68, 0xb8);
+    private static readonly Color CChipSelBg = Color.FromArgb(0x2b, 0x33, 0x50);
+    private static readonly Color CChipSelLine = Color.FromArgb(0x4a, 0x5a, 0x94);
+    private static readonly Color CChipSelText = Color.FromArgb(0xb9, 0xc6, 0xff);
+    private static readonly Color CChipUnselBg = Color.FromArgb(0x22, 0x25, 0x2a);
+    private static readonly Color CChipUnselText = Color.FromArgb(0xa9, 0xb0, 0xb9);
 
     private static System.Drawing.Drawing2D.GraphicsPath RoundRect(Rectangle r, int radius)
     {
@@ -1735,7 +1758,7 @@ internal static class Program
             if (back != Color.Empty) using (SolidBrush b = new SolidBrush(back)) e.Graphics.FillRectangle(b, ClientRectangle);
             string g = Kind == 0 ? "\uE921" : (Kind == 1 ? (Maximized ? "\uE923" : "\uE922") : "\uE8BB");
             Font f = Glyph();
-            DrawInk(e.Graphics, g, f, ClientRectangle, Color.FromArgb(0xdf, 0xe2, 0xe7), true);
+            DrawInk(e.Graphics, g, f, ClientRectangle, CTextStrong, true);
         }
     }
 
@@ -2199,8 +2222,8 @@ internal static class Program
             using (SolidBrush pb = new SolidBrush(Parent != null ? Parent.BackColor : BackColor))
                 e.Graphics.FillRectangle(pb, ClientRectangle);
             Color back, line, fore;
-            if (Primary) { back = Color.FromArgb(0x3d, 0x4b, 0x86); line = Color.FromArgb(0x55, 0x68, 0xb8); fore = Color.White; }
-            else { back = Color.FromArgb(0x26, 0x29, 0x2e); line = Color.FromArgb(0x3a, 0x3e, 0x45); fore = Color.FromArgb(0xdf, 0xe2, 0xe7); }
+            if (Primary) { back = Color.FromArgb(0x3d, 0x4b, 0x86); line = CAccentLine; fore = Color.White; }
+            else { back = Color.FromArgb(0x26, 0x29, 0x2e); line = CBorderStrong; fore = CTextStrong; }
             if (!Enabled) { back = Color.FromArgb(0x21, 0x23, 0x27); line = Color.FromArgb(0x2c, 0x2f, 0x34); fore = Color.FromArgb(0x60, 0x65, 0x6c); }
             else if (_down) back = Primary ? Color.FromArgb(0x33, 0x3f, 0x74) : Color.FromArgb(0x1f, 0x22, 0x27);
             else if (_hover) back = Primary ? Color.FromArgb(0x4a, 0x59, 0x9e) : Color.FromArgb(0x2f, 0x33, 0x3a);
@@ -2251,10 +2274,10 @@ internal static class Program
                 e.Graphics.FillRectangle(pb, ClientRectangle);
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Rectangle box = new Rectangle(1, (Height - 15) / 2, 15, 15);
-            Color line = Checked ? Color.FromArgb(0x55, 0x68, 0xb8) : Color.FromArgb(0x4a, 0x50, 0x58);
+            Color line = Checked ? CAccentLine : Color.FromArgb(0x4a, 0x50, 0x58);
             using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(box, 3))
             {
-                using (SolidBrush b = new SolidBrush(Checked ? Color.FromArgb(0x55, 0x68, 0xb8) : CField)) e.Graphics.FillPath(b, path);
+                using (SolidBrush b = new SolidBrush(Checked ? CAccentLine : CField)) e.Graphics.FillPath(b, path);
                 using (Pen pen = new Pen(line)) e.Graphics.DrawPath(pen, path);
             }
             if (Checked)
@@ -2289,7 +2312,7 @@ internal static class Program
         b.Glyph = glyph;
         b.Primary = primary;
         b.SetBounds(x, y, w, 32);
-        b.ForeColor = primary ? Color.White : Color.FromArgb(0xdf, 0xe2, 0xe7);
+        b.ForeColor = primary ? Color.White : CTextStrong;
         b.BackColor = CPanel;
         return b;
     }
@@ -2405,7 +2428,7 @@ internal static class Program
             SkinForm form = new SkinForm();
             form.FormBorderStyle = FormBorderStyle.None;
             try { form.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-            form.Text = "Server酱3 推送通知";
+            form.Text = AppTitle;
             form.ClientSize = new Size(1000, 600);
             form.MinimumSize = new Size(720, 460);
             form.StartPosition = FormStartPosition.CenterScreen;
@@ -2432,7 +2455,7 @@ internal static class Program
             titleBar.BackColor = CPanel2;
 
             Label titleLbl = new Label();
-            titleLbl.Text = "Server酱3 推送通知";
+            titleLbl.Text = AppTitle;
             titleLbl.SetBounds(14, 10, 420, 20);
             titleLbl.ForeColor = CText;
             titleLbl.Font = fontBase;
@@ -2819,8 +2842,8 @@ internal static class Program
                         unreadMeta ? CChipBg : Color.FromArgb(0x25, 0x28, 0x2d),
                         unreadMeta ? CChipLine : Color.FromArgb(0x38, 0x3c, 0x43),
                         unreadMeta ? CChipText : Color.FromArgb(0x8f, 0x96, 0x9f)) + 6;
-                    if (n.Src.StartsWith("sc3")) x += DrawBadge(e.Graphics, "Server酱³", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), Color.FromArgb(0x3a, 0x3e, 0x45), Color.FromArgb(0xa9, 0xb0, 0xb9)) + 6;
-                    else if (n.Src.Length > 0) x += DrawBadge(e.Graphics, "本地投递", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), Color.FromArgb(0x3a, 0x3e, 0x45), Color.FromArgb(0xa9, 0xb0, 0xb9)) + 6;
+                    if (n.Src.StartsWith("sc3")) x += DrawBadge(e.Graphics, "Server酱³", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), CBorderStrong, CChipUnselText) + 6;
+                    else if (n.Src.Length > 0) x += DrawBadge(e.Graphics, "本地投递", x, y, fontSmall, Color.FromArgb(0x2a, 0x2d, 0x33), CBorderStrong, CChipUnselText) + 6;
                     foreach (string t in n.Tags)
                     {
                         x += DrawBadge(e.Graphics, "#" + t, x, y, fontSmall, CChipBg, CChipLine, CChipText) + 6;
@@ -2833,7 +2856,7 @@ internal static class Program
                 using (SolidBrush pb = new SolidBrush(listHead.BackColor)) e.Graphics.FillRectangle(pb, listHead.ClientRectangle);
                 TextRenderer.DrawText(e.Graphics, "通知", fontSmall, new Rectangle(12, 8, 80, 16), CMuted,
                     TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(e.Graphics, listHeadText, fontSmall, new Rectangle(listHead.Width - 92, 8, 80, 16), Color.FromArgb(0x6b, 0x71, 0x7a),
+                TextRenderer.DrawText(e.Graphics, listHeadText, fontSmall, new Rectangle(listHead.Width - 92, 8, 80, 16), CDim,
                     TextFormatFlags.Right | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
                 using (Pen sep = new Pen(CBorder)) e.Graphics.DrawLine(sep, 0, listHead.Height - 1, listHead.Width, listHead.Height - 1);
             };
@@ -2848,11 +2871,11 @@ internal static class Program
                     Rectangle r = chipRects[i];
                     using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(r, 10))
                     {
-                        using (SolidBrush b = new SolidBrush(sel ? Color.FromArgb(0x2b, 0x33, 0x50) : Color.FromArgb(0x22, 0x25, 0x2a))) e.Graphics.FillPath(b, path);
-                        using (Pen pen = new Pen(sel ? Color.FromArgb(0x4a, 0x5a, 0x94) : Color.FromArgb(0x3a, 0x3e, 0x45))) e.Graphics.DrawPath(pen, path);
+                        using (SolidBrush b = new SolidBrush(sel ? CChipSelBg : CChipUnselBg)) e.Graphics.FillPath(b, path);
+                        using (Pen pen = new Pen(sel ? CChipSelLine : CBorderStrong)) e.Graphics.DrawPath(pen, path);
                     }
                     DrawInk(e.Graphics, chipLabels[i], fontChip, new Rectangle(r.X + 9, r.Y, r.Width - 12, r.Height),
-                        sel ? Color.FromArgb(0xb9, 0xc6, 0xff) : Color.FromArgb(0xa9, 0xb0, 0xb9), false);
+                        sel ? CChipSelText : CChipUnselText, false);
                 }
                 using (Pen sep = new Pen(Color.FromArgb(0x3a, 0x3f, 0x47))) e.Graphics.DrawLine(sep, 0, tagPanel.Height - 1, tagPanel.Width, tagPanel.Height - 1);
             };
@@ -2925,7 +2948,7 @@ internal static class Program
                 {
                     TextRenderer.DrawText(g, timeShort, fontSmall,
                         new Rectangle(timeRight - timeSize.Width, r.Y + 53, timeSize.Width, timeSize.Height),
-                        Color.FromArgb(0x6b, 0x71, 0x7a),
+                        CDim,
                         TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
                 }            };
 
@@ -3038,7 +3061,7 @@ internal static class Program
             settingsBtn.Click += delegate(object sender2, EventArgs e2) { OpenSettings(); };
             closeBtn.Click += delegate(object sender2, EventArgs e2) { form.Close(); };
 
-            string navPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "nav.txt");
+            string navPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, NavFile);
             System.Windows.Forms.Timer navTimer = new System.Windows.Forms.Timer();
             navTimer.Interval = 700;
             string lastNav = "";
