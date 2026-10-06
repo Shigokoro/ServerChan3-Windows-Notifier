@@ -17,7 +17,7 @@ using Windows.UI.Notifications;
 
 internal static class Program
 {
-    private const string Version = "6.1.0";
+    private const string Version = "0.1.0";
     private const string Sc3LoginUrl = "https://bot.ftqq.com/login/by/sendkey";
     private const string Sc3InboxUrl = "https://bot.ftqq.com/sc3/push/index";
 
