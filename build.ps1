@@ -1,6 +1,10 @@
 # 编译 WinPushReceiver.exe（仅需系统自带 csc，无需 VS / Windows SDK 安装 / NuGet）
+param([string]$OutDir = '')          # 产物目录；留空 = 与脚本同目录
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ([string]::IsNullOrEmpty($OutDir)) { $OutDir = $root }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
+$exePath = Join-Path $OutDir 'WinPushReceiver.exe'
 
 # csc（.NET Framework 4.x 自带）
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
@@ -27,9 +31,9 @@ Write-Host "winmd : $winmd"
 Write-Host "facade: $fac"
 
 & $csc /nologo /target:winexe /platform:anycpu /optimize+ `
-  /win32icon:"$root\app.ico" /win32manifest:"$root\app.manifest" /out:"$root\WinPushReceiver.exe" `
+  /win32icon:"$root\app.ico" /win32manifest:"$root\app.manifest" /out:"$exePath" `
   /r:"$winmd" /r:"$fac" "$root\PushReceiver.cs"
 if ($LASTEXITCODE -ne 0) { throw "编译失败: $LASTEXITCODE" }
 
-Get-Item "$root\WinPushReceiver.exe" | ForEach-Object { 'OK: ' + $_.FullName + '  ' + $_.Length + ' bytes  ' + $_.LastWriteTime }
+Get-Item $exePath | ForEach-Object { 'OK: ' + $_.FullName + '  ' + $_.Length + ' bytes  ' + $_.LastWriteTime }
 '提示: 产物是单个 exe，直接分发即可（DPI 感知由内嵌的 app.manifest 提供，无需 .exe.config）'
