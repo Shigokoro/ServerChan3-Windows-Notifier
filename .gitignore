@@ -1,0 +1,25 @@
+# 构建产物（Release 里作为附件分发，不进 git）
+*.exe
+*.exe.config
+*.pdb
+
+# 本人真实数据（含真实通知内容，禁止入库）
+*.jsonl
+*.log
+PushReceiver.ini
+seen.txt
+read.txt
+nav.txt
+
+# 界面截图：除效果图外一律排除（含真实通知内容）
+ui-*.png
+!ui-mockup.png
+icon-from-exe.png
+
+# 系统/编辑器
+Thumbs.db
+desktop.ini
+.vs/
+.vscode/
+bin/
+obj/

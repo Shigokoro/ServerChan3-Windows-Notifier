@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>WinPushReceiver · UI 效果图</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background:#15161a; font-family:"Microsoft YaHei UI","Segoe UI",sans-serif; color:#e8eaed; padding:28px; }
+.wrap { display:flex; gap:26px; align-items:flex-start; }
+.win { background:#1e2024; border:1px solid #33363c; border-radius:10px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.45); }
+.titlebar { height:38px; display:flex; align-items:center; padding:0 12px; background:#232529; border-bottom:1px solid #33363c; font-size:12.5px; color:#c8ccd2; }
+.titlebar .btns { margin-left:auto; display:flex; gap:16px; color:#8b9099; font-size:12px; }
+.detail { width:860px; height:560px; display:flex; flex-direction:column; }
+.body { display:flex; flex:1; min-height:0; }
+.side { width:268px; border-right:1px solid #2c2f34; display:flex; flex-direction:column; background:#1b1d21; }
+.sidehead { padding:10px 12px 8px; font-size:11px; color:#7e848d; letter-spacing:.5px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 10px; border-bottom:1px solid #2c2f34; }
+.chip { font-size:11px; padding:2px 9px; border-radius:999px; border:1px solid #3a3e45; color:#a9b0b9; background:#22252a; }
+.chip.on { background:#2b3350; border-color:#4a5a94; color:#b9c6ff; }
+.list { overflow:hidden; flex:1; }
+.item { padding:9px 12px 10px; border-bottom:1px solid #23262b; }
+.item.sel { background:#262b3a; box-shadow:inset 3px 0 0 #7c8cf8; }
+.item .t { font-size:11px; color:#767c85; margin-bottom:3px; }
+.item .h { font-size:13px; color:#e8eaed; line-height:1.3; }
+.item.sel .h { color:#fff; }
+.main { flex:1; display:flex; flex-direction:column; min-width:0; }
+.head { padding:16px 20px 12px; border-bottom:1px solid #2c2f34; }
+.head h1 { font-size:16px; font-weight:600; margin-bottom:6px; }
+.meta { font-size:11.5px; color:#868c95; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.badge { font-size:11px; padding:1px 8px; border-radius:999px; background:#2a2d33; border:1px solid #3a3e45; color:#a9b0b9; }
+.badge.tag { background:#232a44; border-color:#3f4d80; color:#a9b8ff; }
+.content { flex:1; padding:16px 20px; overflow:hidden; font-size:13px; line-height:1.75; color:#d7dae0; }
+.content code { background:#262a30; padding:1px 5px; border-radius:4px; font-size:12px; color:#cfd6e6; }
+.foot { border-top:1px solid #2c2f34; padding:10px 14px; display:flex; gap:10px; background:#1b1d21; }
+.btn { font-size:12.5px; padding:7px 16px; border-radius:6px; border:1px solid #3a3e45; background:#26292e; color:#dfe2e7; }
+.btn.primary { background:#3d4b86; border-color:#5568b8; color:#fff; }
+.btn.ghost { background:transparent; }
+.settings { width:600px; height:430px; display:flex; flex-direction:column; }
+.sect { padding:16px 20px; }
+.lbl { font-size:12px; color:#9aa0a8; margin-bottom:6px; }
+.row { display:flex; gap:10px; align-items:center; }
+.input { flex:1; height:34px; background:#17191d; border:1px solid #383c43; border-radius:6px; color:#e8eaed; padding:0 10px; font-size:13px; display:flex; align-items:center; letter-spacing:2px; }
+.input.plain { letter-spacing:0; color:#c9cdd3; }
+.check { display:flex; gap:7px; align-items:center; font-size:12.5px; color:#c2c7ce; }
+.box { width:14px; height:14px; border-radius:3px; border:1px solid #4a5058; background:#17191d; }
+.box.on { background:#5568b8; border-color:#5568b8; }
+.status { background:#1a1c20; border:1px solid #2c2f34; border-radius:8px; padding:12px 14px; font-size:12px; color:#9aa0a8; line-height:1.8; }
+.status b { color:#d7dae0; font-weight:500; }
+.ok { color:#6ecf8f; } .warn { color:#e2b04a; }
+.sep { height:1px; background:#2c2f34; }
+</style></head><body>
+<div class="wrap">
+<div class="win detail">
+  <div class="titlebar">推送通知 · 详情<span class="btns">—　□　×</span></div>
+  <div class="body">
+    <div class="side">
+      <div class="sidehead">标签分类</div>
+      <div class="chips"><span class="chip on">全部</span><span class="chip">告警</span><span class="chip">构建</span><span class="chip">日报</span><span class="chip">服务器</span></div>
+      <div class="list">
+        <div class="item sel"><div class="t">10-06 23:48:24</div><div class="h">打包完成（长正文测试）</div></div>
+        <div class="item"><div class="t">10-06 23:48:12</div><div class="h">JSON 标签验证</div></div>
+        <div class="item"><div class="t">10-06 23:48:12</div><div class="h">表单标签验证</div></div>
+        <div class="item"><div class="t">10-06 23:47:32</div><div class="h">标签读回验证</div></div>
+        <div class="item"><div class="t">10-06 23:43:07</div><div class="h">第二条测试通知</div></div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="head">
+        <h1>打包完成（长正文测试）</h1>
+        <div class="meta">2026-10-06 23:43:07 <span class="badge">Server酱³</span> <span class="badge tag">#告警</span><span class="badge tag">#构建</span></div>
+      </div>
+      <div class="content">
+        构建产物已就绪。<br><br>
+        - 任务：vrchat-asset-library v3.2.1 打包<br>
+        - 耗时：3 分 12 秒<br>
+        - 产物：<code>dist/素材库桌面版.exe</code>（12.4 MB）<br>
+        - 校验：SHA256 8f3c…a91d<br><br>
+        点击本条通知可在此窗口查看完整正文，不会跳转到任何网站。
+      </div>
+      <div class="foot">
+        <span class="btn">复制正文</span><span class="btn">打开链接</span><span class="btn primary">设置 SendKey</span><span class="btn ghost">关闭</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="win settings">
+  <div class="titlebar">推送通知 · 设置<span class="btns">×</span></div>
+  <div class="sect">
+    <div class="lbl">SendKey（sc3.ft07.com → SendKey 页面）</div>
+    <div class="row"><div class="input">••••••••••••••••••••••</div><span class="check"><span class="box"></span>显示</span></div>
+    <div style="margin-top:10px"><span class="btn">打开 SendKey 页面</span></div>
+  </div>
+  <div class="sep"></div>
+  <div class="sect">
+    <div class="row" style="gap:26px">
+      <div class="check"><span class="box on"></span>启用 Server酱³ 收件箱轮询</div>
+      <div class="check"><span class="box on"></span>通知标题显示 [标签]</div>
+    </div>
+    <div style="margin-top:14px"><div class="lbl">轮询间隔（秒）</div><div class="input plain" style="width:110px">15</div></div>
+  </div>
+  <div class="sect" style="padding-top:0">
+    <div class="status"><b>SendKey</b>：已配置（32 字符）　<b>轮询</b>：15 秒<br><b>守护进程</b>：运行中　<b>上次同步</b>：2026-10-06 23:48:24<br><span class="ok">状态正常</span> · 本次已收 3 条</div>
+  </div>
+  <div class="foot" style="margin-top:auto">
+    <span class="btn">测试连接</span><span class="btn primary">保存并同步</span><span class="btn">立即同步</span><span class="btn ghost">关闭</span>
+  </div>
+</div>
+</div></body></html>
