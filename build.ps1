@@ -30,6 +30,14 @@ Write-Host "csc   : $csc"
 Write-Host "winmd : $winmd"
 Write-Host "facade: $fac"
 
+# UI-GUARD：文字必须统一走 GDI（TextRenderer.DrawText）。GDI+ DrawString 在小字号下不做 hinting，
+# 会出现锯齿/发虚，且与全局标签不一致 —— 一旦源码里再出现它，直接让构建失败。
+$guard = Select-String -Path (Join-Path $root 'PushReceiver.cs') -Pattern 'DrawString(' -SimpleMatch
+if ($guard) {
+    $guard | ForEach-Object { Write-Host ('  ' + $_.LineNumber + ': ' + $_.Line.Trim()) }
+    throw 'UI-GUARD 失败：PushReceiver.cs 中仍有 GDI+ DrawString(，请改用 TextRenderer.DrawText'
+}
+
 & $csc /nologo /target:winexe /platform:anycpu /optimize+ `
   /win32icon:"$root\app.ico" /win32manifest:"$root\app.manifest" /out:"$exePath" `
   /r:"$winmd" /r:"$fac" "$root\PushReceiver.cs"

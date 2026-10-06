@@ -17,7 +17,7 @@ using Windows.UI.Notifications;
 
 internal static class Program
 {
-    private const string Version = "0.1.6";
+    private const string Version = "0.1.1";   // 版本号只在正式发版时修改（见本地 dev/DEVNOTES.md）
     private const string Sc3LoginUrl = "https://bot.ftqq.com/login/by/sendkey";
     private const string Sc3InboxUrl = "https://bot.ftqq.com/sc3/push/index";
 
@@ -35,6 +35,74 @@ internal static class Program
     private static DateTime _startUtc = DateTime.UtcNow;
 
     private static string _sendKey = "";
+
+    // ── 唯一一份字体表：所有界面字体都从这里取；禁止在各处 new Font(...) ──
+    private static readonly Font FBase = MakeFont("Microsoft YaHei UI", 9F, FontStyle.Regular);
+    private static readonly Font FSmall = MakeFont("Microsoft YaHei UI", 7.5F, FontStyle.Regular);
+    private static readonly Font FChip = MakeFont("Microsoft YaHei UI", 8F, FontStyle.Regular);
+    private static readonly Font FTag = MakeFont("Microsoft YaHei UI", 6.6F, FontStyle.Regular);
+    private static readonly Font FTitle = MakeFont("Microsoft YaHei UI", 12F, FontStyle.Bold);
+    private static readonly Font FHead = MakeFont("Microsoft YaHei UI", 8.5F, FontStyle.Regular);
+    private static readonly Font FIcon = MakeFont("Segoe MDL2 Assets", 10F, FontStyle.Regular);
+    private static readonly Font FIconSmall = MakeFont("Segoe MDL2 Assets", 7F, FontStyle.Regular);
+    private static readonly Font FIconBig = MakeFont("Segoe MDL2 Assets", 13F, FontStyle.Regular);
+
+    private static Font MakeFont(string family, float size, FontStyle style)
+    {
+        try { return new Font(family, size, style); }
+        catch { try { return new Font(family, size); } catch { return SystemFonts.DefaultFont; } }
+    }
+
+    // ── 唯一一份「字形墨迹框」测量：GDI 渲染一次并扫描，按 字形+字号 缓存 ──
+    private static readonly Dictionary<string, Rectangle> _inkCache = new Dictionary<string, Rectangle>();
+
+    // 唯一一份「把文字/字形放进盒子」的实现：先量墨迹框，再按墨迹居中。
+    // 任何需要"居中/对齐到盒子里"的绘制都必须走这里，禁止各自用 VerticalCenter 估算。
+    private static void DrawInk(Graphics g, string text, Font f, Rectangle box, Color c, bool centerX)
+    {
+        Rectangle ink = IconInk(text, f);
+        int x = centerX ? box.X + (box.Width - ink.Width) / 2 - ink.X : box.X - ink.X;
+        int y = box.Y + (box.Height - ink.Height) / 2 - ink.Y;
+        TextRenderer.DrawText(g, text, f, new Point(x, y), c, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+    }
+
+    private static Rectangle IconInk(string glyph, Font f)
+    {
+        string key = glyph + "|" + f.SizeInPoints.ToString("0.0", CultureInfo.InvariantCulture);
+        Rectangle cached;
+        if (_inkCache.TryGetValue(key, out cached)) return cached;
+        Rectangle box = new Rectangle(0, 0, 1, 1);
+        try
+        {
+            using (Bitmap bm = new Bitmap(96, 96))
+            {
+                using (Graphics g2 = Graphics.FromImage(bm))
+                {
+                    g2.Clear(Color.Black);
+                    TextRenderer.DrawText(g2, glyph, f, new Point(12, 12), Color.White,
+                        TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+                }
+                int minx = 9999, miny = 9999, maxx = -1, maxy = -1;
+                for (int y = 0; y < 96; y++)
+                {
+                    for (int x = 0; x < 96; x++)
+                    {
+                        if (bm.GetPixel(x, y).R > 40)
+                        {
+                            if (x < minx) minx = x;
+                            if (x > maxx) maxx = x;
+                            if (y < miny) miny = y;
+                            if (y > maxy) maxy = y;
+                        }
+                    }
+                }
+                if (maxx >= 0) box = new Rectangle(minx - 12, miny - 12, maxx - minx + 1, maxy - miny + 1);
+            }
+        }
+        catch { }
+        _inkCache[key] = box;
+        return box;
+    }
 
     // 首次运行自建 AUMID：通知里显示的名称与图标（不依赖任何手工注册表操作）
     private static void RegisterAumid(string baseDir)
@@ -970,7 +1038,7 @@ internal static class Program
         d.MinimizeBox = false;
         d.BackColor = CPanel;
         d.ForeColor = CText;
-        try { d.Font = new Font("Microsoft YaHei UI", 9F); } catch { }
+        d.Font = FBase;
 
         Label lbl = new Label();
         lbl.SetBounds(18, 18, 454, 70);
@@ -1186,8 +1254,8 @@ internal static class Program
             string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PushReceiver.ini");
 
             Font fontBase, fontSmall;
-            try { fontBase = new Font("Microsoft YaHei UI", 9F); } catch { fontBase = SystemFonts.DefaultFont; }
-            try { fontSmall = new Font("Microsoft YaHei UI", 7.5F); } catch { fontSmall = fontBase; }
+            fontBase = FBase;
+            fontSmall = FSmall;
 
             Form f = new Form();
             try { f.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
@@ -1212,7 +1280,15 @@ internal static class Program
             keyWrap.BackColor = CField;
             keyWrap.Paint += delegate(object s2, PaintEventArgs e2)
             {
-                using (Pen pen = new Pen(CBorder)) e2.Graphics.DrawRectangle(pen, 0, 0, keyWrap.Width - 1, keyWrap.Height - 1);
+                Graphics kg = e2.Graphics;
+                using (SolidBrush pb = new SolidBrush(keyWrap.Parent != null ? keyWrap.Parent.BackColor : CPanel))
+                    kg.FillRectangle(pb, keyWrap.ClientRectangle);
+                kg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(new Rectangle(0, 0, keyWrap.Width - 1, keyWrap.Height - 1), 8))
+                {
+                    using (SolidBrush b = new SolidBrush(CField)) kg.FillPath(b, path);
+                    using (Pen pen = new Pen(CBorder)) kg.DrawPath(pen, path);
+                }
             };
 
             TextBox keyBox = new TextBox();
@@ -1227,7 +1303,7 @@ internal static class Program
             keyWrap.Controls.Add(keyBox);
 
             EyeToggle eye = new EyeToggle();
-            eye.SetBounds(keyWrap.Width - 34, 0, 33, keyWrap.Height);
+            eye.SetBounds(keyWrap.Width - 34, 4, 28, keyWrap.Height - 8);   // 完全落在边框内侧，不覆盖圆角/描边
             eye.Click += delegate(object s2, EventArgs e2)
             {
                 keyBox.UseSystemPasswordChar = !keyBox.UseSystemPasswordChar;
@@ -1283,8 +1359,9 @@ internal static class Program
                 for (int i = 0; i < statusLines.Length; i++)
                 {
                     if (string.IsNullOrEmpty(statusLines[i])) continue;
-                    using (SolidBrush fg = new SolidBrush(statusColors[i]))
-                        e2.Graphics.DrawString(statusLines[i], i == 0 ? fontBase : fontSmall, fg, 14, 12 + i * 28);
+                    TextRenderer.DrawText(e2.Graphics, statusLines[i], i == 0 ? fontBase : fontSmall,
+                        new Rectangle(14, 10 + i * 28, statusCard.Width - 28, 22), statusColors[i],
+                        TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
                 }
             };
 
@@ -1595,8 +1672,7 @@ internal static class Program
             using (SolidBrush b = new SolidBrush(CChipBg)) g.FillPath(b, path);
             using (Pen pen = new Pen(CChipLine)) g.DrawPath(pen, path);
         }
-        TextRenderer.DrawText(g, text, font, r, CChipText,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        DrawInk(g, text, font, r, CChipText, true);
         usedWidth = w;
     }
 
@@ -1640,7 +1716,7 @@ internal static class Program
 
         private static Font Glyph()
         {
-            if (_f == null) { try { _f = new Font("Segoe MDL2 Assets", 10F); } catch { _f = SystemFonts.DefaultFont; } }
+            if (_f == null) _f = FIcon;
             return _f;
         }
 
@@ -1659,9 +1735,7 @@ internal static class Program
             if (back != Color.Empty) using (SolidBrush b = new SolidBrush(back)) e.Graphics.FillRectangle(b, ClientRectangle);
             string g = Kind == 0 ? "\uE921" : (Kind == 1 ? (Maximized ? "\uE923" : "\uE922") : "\uE8BB");
             Font f = Glyph();
-            TextRenderer.DrawText(e.Graphics, g, f, ClientRectangle,
-                Color.FromArgb(0xdf, 0xe2, 0xe7),
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            DrawInk(e.Graphics, g, f, ClientRectangle, Color.FromArgb(0xdf, 0xe2, 0xe7), true);
         }
     }
 
@@ -1682,7 +1756,7 @@ internal static class Program
         {
             if (_f == null)
             {
-                try { _f = new Font("Segoe MDL2 Assets", 13F); } catch { _f = SystemFonts.DefaultFont; }
+                _f = FIconBig;
             }
             return _f;
         }
@@ -1694,13 +1768,13 @@ internal static class Program
         {
             using (SolidBrush pb = new SolidBrush(Parent != null ? Parent.BackColor : CField))
                 e.Graphics.FillRectangle(pb, ClientRectangle);
-            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
-            string g = Revealed ? "\uED1A" : "\uE7B3";   // 眼睛 / 划掉的眼睛（Fluent 与 MDL2 下都能清晰成像）
+            string g = Revealed ? "\uED1A" : "\uE7B3";
             Color c = _hover ? Color.White : Color.FromArgb(0xc2, 0xc8, 0xd1);
             Font f = Glyph();
-            SizeF sz = e.Graphics.MeasureString(g, f);
-            using (SolidBrush fb = new SolidBrush(c))
-                e.Graphics.DrawString(g, f, fb, (Width - sz.Width) / 2f, (Height - sz.Height) / 2f);
+            Rectangle ink = IconInk(g, f);
+            TextRenderer.DrawText(e.Graphics, g, f,
+                new Point((Width - ink.Width) / 2 - ink.X, (Height - ink.Height) / 2 - ink.Y), c,
+                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
         }
     }
 
@@ -1718,7 +1792,7 @@ internal static class Program
         public NumberField()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
-            try { Font = new Font("Microsoft YaHei UI", 9F); } catch { Font = SystemFonts.DefaultFont; }
+            Font = FBase;
             Cursor = Cursors.IBeam;
         }
 
@@ -1752,15 +1826,12 @@ internal static class Program
                 using (Pen pen = new Pen(_focused ? CAccent : CBorder)) g.DrawPath(pen, path);
             }
             string shown = _editing ? _text : _value.ToString(CultureInfo.InvariantCulture);
-            TextRenderer.DrawText(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            DrawInk(g, shown, Font, new Rectangle(11, 0, Width - 44, Height), CText, false);
             using (Pen pen = new Pen(CBorder)) g.DrawLine(pen, Width - 26, 5, Width - 26, Height - 6);
-            using (Font f = new Font("Segoe MDL2 Assets", 7F))
+            Font f = FIconSmall;
             {
-                TextRenderer.DrawText(g, "\uE70E", f, UpRect, _hoverBtn == 0 ? CText : CMuted,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
-                TextRenderer.DrawText(g, "\uE70D", f, DownRect, _hoverBtn == 1 ? CText : CMuted,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                DrawInk(g, "\uE70E", f, UpRect, _hoverBtn == 0 ? CText : CMuted, true);
+                DrawInk(g, "\uE70D", f, DownRect, _hoverBtn == 1 ? CText : CMuted, true);
             }
         }
 
@@ -2107,11 +2178,13 @@ internal static class Program
             TabStop = false;
         }
 
+        private static readonly Dictionary<string, Rectangle> _inkCache = new Dictionary<string, Rectangle>();
+
         private static Font GlyphFont()
         {
             if (_glyphFont == null)
             {
-                try { _glyphFont = new Font("Segoe MDL2 Assets", 10F); } catch { _glyphFont = SystemFonts.DefaultFont; }
+                _glyphFont = FIcon;
             }
             return _glyphFont;
         }
@@ -2129,8 +2202,8 @@ internal static class Program
             if (Primary) { back = Color.FromArgb(0x3d, 0x4b, 0x86); line = Color.FromArgb(0x55, 0x68, 0xb8); fore = Color.White; }
             else { back = Color.FromArgb(0x26, 0x29, 0x2e); line = Color.FromArgb(0x3a, 0x3e, 0x45); fore = Color.FromArgb(0xdf, 0xe2, 0xe7); }
             if (!Enabled) { back = Color.FromArgb(0x21, 0x23, 0x27); line = Color.FromArgb(0x2c, 0x2f, 0x34); fore = Color.FromArgb(0x60, 0x65, 0x6c); }
-            else if (_down) back = ControlPaint.Dark(back, 0.10f);
-            else if (_hover) back = ControlPaint.Light(back, 0.14f);
+            else if (_down) back = Primary ? Color.FromArgb(0x33, 0x3f, 0x74) : Color.FromArgb(0x1f, 0x22, 0x27);
+            else if (_hover) back = Primary ? Color.FromArgb(0x4a, 0x59, 0x9e) : Color.FromArgb(0x2f, 0x33, 0x3a);
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (System.Drawing.Drawing2D.GraphicsPath path = RoundRect(r, 6))
@@ -2142,14 +2215,19 @@ internal static class Program
             if (!string.IsNullOrEmpty(Glyph))
             {
                 Font gf = GlyphFont();
-                SizeF gsz = e.Graphics.MeasureString(Glyph, gf);
-                int gx = x;
-                if (string.IsNullOrEmpty(Text)) gx = (int)((Width - gsz.Width) / 2f);
-                using (SolidBrush fb = new SolidBrush(fore)) e.Graphics.DrawString(Glyph, gf, fb, gx, (Height - gsz.Height) / 2f + 1);
-                x = gx + (int)gsz.Width + 3;
+                Rectangle ink = IconInk(Glyph, gf);
+                int inkLeft = string.IsNullOrEmpty(Text) ? (Width - ink.Width) / 2 : x;
+                int inkTop = (Height - ink.Height) / 2;
+                int gx = inkLeft - ink.X;
+                int gy = inkTop - ink.Y;
+                TextRenderer.DrawText(e.Graphics, Glyph, gf, new Point(gx, gy), fore,
+                    TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+                x = inkLeft + ink.Width + 4;
             }
-            SizeF tsz = e.Graphics.MeasureString(Text, Font);
-            using (SolidBrush ft = new SolidBrush(fore)) e.Graphics.DrawString(Text, Font, ft, x, (Height - tsz.Height) / 2f);
+            if (!string.IsNullOrEmpty(Text))
+            {
+                DrawInk(e.Graphics, Text, Font, new Rectangle(x, 0, Math.Max(0, Width - x - 6), Height), fore, false);
+            }
         }
     }
 
@@ -2191,8 +2269,7 @@ internal static class Program
                         new Point(box.X + 12, box.Y + 4) });
                 }
             }
-            using (SolidBrush fg = new SolidBrush(Enabled ? ForeColor : CMuted))
-                e.Graphics.DrawString(Text, Font, fg, 22, (Height - e.Graphics.MeasureString(Text, Font).Height) / 2f);
+            DrawInk(e.Graphics, Text, Font, new Rectangle(22, 0, Math.Max(0, Width - 24), Height), Enabled ? CText : CMuted, false);
         }
     }
 
@@ -2286,7 +2363,8 @@ internal static class Program
             using (SolidBrush b = new SolidBrush(bg)) g.FillPath(b, path);
             using (Pen pen = new Pen(line)) g.DrawPath(pen, path);
         }
-        using (SolidBrush fg = new SolidBrush(fgColor)) g.DrawString(text, font, fg, x + 8, y + 2);
+        TextRenderer.DrawText(g, text, font, new Rectangle(x + 8, y + 2, 220, 20), fgColor,
+            TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
         return w;
     }
 
@@ -2316,13 +2394,13 @@ internal static class Program
             catch { }
 
             Font fontBase, fontSmall, fontChip, fontTitle, fontHead;
-            try { fontBase = new Font("Microsoft YaHei UI", 9F); } catch { fontBase = SystemFonts.DefaultFont; }
-            try { fontSmall = new Font("Microsoft YaHei UI", 7.5F); } catch { fontSmall = fontBase; }
-            try { fontChip = new Font("Microsoft YaHei UI", 8F); } catch { fontChip = fontBase; }
+            fontBase = FBase;
+            fontSmall = FSmall;
+            fontChip = FChip;
             Font fontTag;
-            try { fontTag = new Font("Microsoft YaHei UI", 6.6F); } catch { fontTag = fontSmall; }
-            try { fontTitle = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold); } catch { fontTitle = fontBase; }
-            try { fontHead = new Font("Microsoft YaHei UI", 8.5F); } catch { fontHead = fontBase; }
+            fontTag = FTag;
+            fontTitle = FTitle;
+            fontHead = FHead;
 
             SkinForm form = new SkinForm();
             form.FormBorderStyle = FormBorderStyle.None;
@@ -2730,7 +2808,8 @@ internal static class Program
                 int y = 4;
                 string time = n != null ? n.Time : "";
                 using (SolidBrush fg = new SolidBrush(CMuted))
-                    e.Graphics.DrawString(time, fontSmall, fg, x, y + 3);
+                    TextRenderer.DrawText(e.Graphics, time, fontSmall, new Rectangle(x, y + 3, 160, 18), fg.Color,
+                    TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
                 SizeF tsz = e.Graphics.MeasureString(time, fontSmall);
                 x += (int)Math.Ceiling(tsz.Width) + 10;
                 if (n != null)
@@ -2772,8 +2851,8 @@ internal static class Program
                         using (SolidBrush b = new SolidBrush(sel ? Color.FromArgb(0x2b, 0x33, 0x50) : Color.FromArgb(0x22, 0x25, 0x2a))) e.Graphics.FillPath(b, path);
                         using (Pen pen = new Pen(sel ? Color.FromArgb(0x4a, 0x5a, 0x94) : Color.FromArgb(0x3a, 0x3e, 0x45))) e.Graphics.DrawPath(pen, path);
                     }
-                    using (SolidBrush fg = new SolidBrush(sel ? Color.FromArgb(0xb9, 0xc6, 0xff) : Color.FromArgb(0xa9, 0xb0, 0xb9)))
-                        e.Graphics.DrawString(chipLabels[i], fontChip, fg, r.X + 9, r.Y + 3);
+                    DrawInk(e.Graphics, chipLabels[i], fontChip, new Rectangle(r.X + 9, r.Y, r.Width - 12, r.Height),
+                        sel ? Color.FromArgb(0xb9, 0xc6, 0xff) : Color.FromArgb(0xa9, 0xb0, 0xb9), false);
                 }
                 using (Pen sep = new Pen(Color.FromArgb(0x3a, 0x3f, 0x47))) e.Graphics.DrawLine(sep, 0, tagPanel.Height - 1, tagPanel.Width, tagPanel.Height - 1);
             };
@@ -3244,3 +3323,4 @@ internal static class Program
         stream.Flush();
     }
 }
+
